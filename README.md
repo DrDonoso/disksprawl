@@ -183,8 +183,8 @@ a Proxmox LXC container next to a NAS, follow the
 
 4. **First steps**: open `http://<host>:7780`, press **⚙** at the top right, then
    **Add directory**. Pick a folder such as `/data/storage`, choose its schedule and scan method
-   (the defaults are a gentle daily scan at 03:00) and press **Add directory**. Then press
-   **Scan now** to see it right away.
+   (by default, daily at 03:00 with the Native engine, the *Balanced* pace and low priority) and
+   press **Add directory**. Then press **Scan now** to see it right away.
 
 To try it from the source code with a synthetic sample tree instead, see
 [`docker-compose.local.yml`](docker-compose.local.yml). The [deployment guide](docs/deployment.md)
