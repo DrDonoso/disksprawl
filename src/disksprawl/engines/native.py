@@ -20,6 +20,7 @@ from .common import (
     Progress,
     Sleep,
     Tree,
+    display_name,
     entry_size,
     folder_size,
     monotonic,
@@ -80,7 +81,10 @@ def scan_native(
                 name = entry.name
                 if excluded(name):
                     continue
-                child_path = relative_path + "/" + name if relative_path else name
+                # entry.path keeps the real name for the file system; the tree, the errors and the
+                # progress get it as valid text (bytes that are not UTF-8 escaped).
+                label = display_name(name)
+                child_path = relative_path + "/" + label if relative_path else label
                 try:
                     is_dir = entry.is_dir(follow_symlinks=False)
                     stat = entry.stat(follow_symlinks=False)
@@ -91,7 +95,7 @@ def scan_native(
                     if job.one_filesystem and stat.st_dev != root_device:
                         continue
                     size = folder_size(stat, measure)
-                    child = tree.add(folder, name, size)
+                    child = tree.add(folder, label, size)
                     progress.bytes += size
                     work.put((child, entry.path, child_path))
                     continue

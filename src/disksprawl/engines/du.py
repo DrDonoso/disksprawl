@@ -4,9 +4,68 @@ total size, separated by NUL bytes. It reads with one thread and does not count 
 import re
 from typing import IO
 
-from .common import ErrorLog, Job, Progress, Tree, display_name, relative
+from .common import ErrorLog, Job, Progress, Tree, display_name
 
-ERROR = re.compile(r"^du: (?P<what>.*?)'(?P<path>.*)': (?P<reason>.*)$")
+# du quotes file names in its messages like a shell would: 'a b', "it's", 'ni'$'\361''os'…
+QUOTED = r"""(?:'[^']*'|"(?:[^"\\]|\\.)*"|\$'(?:[^'\\]|\\.)*'|\\.)+"""
+# …and starts them with its name as it was run: `du: `, `/usr/bin/du: `, `/usr/bin/gnudu: `.
+PROGRAM = r"[^\s:'\"]+: "
+ERROR = re.compile(rf"^{PROGRAM}(?P<what>.*?) ?(?P<path>{QUOTED}): (?P<reason>[^'\"]*)$")
+MESSAGE = re.compile(rf"^{PROGRAM}(?P<message>.+)$")
+C_ESCAPES = {"a": 7, "b": 8, "e": 27, "E": 27, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11}
+
+
+def shell_unquote(word: str) -> bytes:
+    """The bytes of a word quoted as GNU coreutils quotes file names in its messages."""
+    out = bytearray()
+    position, end = 0, len(word)
+
+    def literal(text: str) -> bytes:
+        return text.encode("utf-8", "surrogateescape")
+
+    while position < end:
+        character = word[position]
+        if character == "'":
+            close = word.find("'", position + 1)
+            close = end if close < 0 else close
+            out += literal(word[position + 1 : close])
+            position = close + 1
+        elif character == '"':
+            position += 1
+            while position < end and word[position] != '"':
+                escaped = word[position + 1 : position + 2]
+                if word[position] == "\\" and escaped in ("\\", '"', "$", "`"):
+                    position += 1
+                out += literal(word[position])
+                position += 1
+            position += 1
+        elif word.startswith("$'", position):
+            position += 2
+            while position < end and word[position] != "'":
+                if word[position] != "\\" or position + 1 >= end:
+                    out += literal(word[position])
+                    position += 1
+                    continue
+                escape = word[position + 1]
+                octal = re.match(r"[0-7]{1,3}", word[position + 1 : position + 4])
+                hexadecimal = re.match(r"x([0-9a-fA-F]{1,2})", word[position + 1 : position + 4])
+                if octal:
+                    out.append(int(octal[0], 8) & 0xFF)
+                    position += 1 + len(octal[0])
+                elif hexadecimal:
+                    out.append(int(hexadecimal[1], 16))
+                    position += 1 + len(hexadecimal[0])
+                else:
+                    out += bytes([C_ESCAPES[escape]]) if escape in C_ESCAPES else literal(escape)
+                    position += 2
+            position += 1
+        elif character == "\\" and position + 1 < end:
+            out += literal(word[position + 1])
+            position += 2
+        else:
+            out += literal(character)
+            position += 1
+    return bytes(out)
 
 
 def du_command(job: Job, binary: str) -> list[str]:
@@ -65,8 +124,14 @@ def du_error(line: str, root: str, errors: ErrorLog) -> None:
     """Records one line of du's stderr (`du: cannot read directory '…': Permission denied`)."""
     match = ERROR.match(line)
     if match:
-        what = match["what"].strip()
+        what = match["what"].strip().rstrip(":")
         reason = match["reason"].strip()
-        errors.add(relative(root, match["path"]), f"{what}: {reason}" if what else reason)
-    elif line.startswith("du: "):
-        errors.add("", line[4:].strip())
+        path = shell_unquote(match["path"])
+        prefix = root.encode("utf-8", "surrogateescape").rstrip(b"/")
+        if path == prefix:
+            path = b""
+        elif path.startswith(prefix + b"/"):
+            path = path[len(prefix) + 1 :]
+        errors.add(display_name(path), f"{what}: {reason}" if what else reason)
+    elif other := MESSAGE.match(line):
+        errors.add("", other["message"].strip())

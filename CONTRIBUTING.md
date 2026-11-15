@@ -126,7 +126,9 @@ when the migrations and the models disagree.
 
 All engines must keep giving the same totals: extend `tests/test_engines_integration.py` when you
 change how sizes are counted, and keep the parsers' fixtures in `tests/fixtures/` synthetic. Engines
-are started with argument lists, never through a shell. To update ncdu or gdu, change their
+are started with argument lists, never through a shell. File names are bytes and may not be UTF-8:
+pass every name or path through `display_name` before it reaches the tree, the errors, the progress
+or the API. To update ncdu or gdu, change their
 versions and checksums in `scripts/install-engines.sh` and in `licenses/THIRD-PARTY.txt`.
 
 ### The demo

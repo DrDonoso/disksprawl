@@ -9,7 +9,7 @@ import io
 from conftest import load_fixture
 
 from disksprawl.engines.common import ErrorLog, Job, Progress, Tree
-from disksprawl.engines.du import du_command, du_error, parse_du
+from disksprawl.engines.du import du_command, du_error, parse_du, shell_unquote
 from disksprawl.engines.gdu import gdu_command, gdu_errors, ignore_patterns, parse_gdu
 from disksprawl.engines.ncdu import TerminalProgress, ncdu_command, parse_ncdu
 
@@ -117,6 +117,85 @@ def test_du_names_that_are_not_utf8() -> None:
     tree = Tree(count_files=False)
     parse_du(io.BytesIO(data), ROOT, tree, quiet())
     assert "caf\\xe9" in paths(tree)
+
+
+class Trickle(io.BytesIO):
+    """A stream that gives one byte per read, to split every sequence across reads."""
+
+    def read(self, size: int | None = -1) -> bytes:
+        return super().read(1)
+
+    def read1(self, size: int | None = -1) -> bytes:
+        return super().read(1)
+
+
+NCDU_LATIN1 = (
+    b'[1,2,{"progname":"ncdu","progver":"2.9.1"},\n'
+    b'[{"name":"/srv/tree","asize":4096,"dsize":4096,"dev":1},\n'
+    b'[{"name":"M\xfasica","asize":4096,"dsize":4096},\n'
+    b'{"name":"song\xff.flac","asize":3145728,"dsize":3145728}],\n'
+    b'[{"name":"Fotos ni\xf1os","asize":4096,"dsize":4096,"read_error":true}],\n'
+    b'[{"name":"caf\xc3\xa9","asize":4096,"dsize":4096}]]]\n'
+)
+
+
+def test_ncdu_names_that_are_not_utf8() -> None:
+    """ncdu writes names as they are on disk: bytes that are not UTF-8 become `\\xNN`, as the
+    native engine and du write them, even when a read splits them."""
+    for stream in (io.BytesIO(NCDU_LATIN1), Trickle(NCDU_LATIN1)):
+        tree, errors = Tree(), ErrorLog()
+        assert parse_ncdu(stream, job(), tree, errors, quiet())
+        folders = paths(tree)
+        assert set(folders) == {"", "M\\xfasica", "Fotos ni\\xf1os", "café"}
+        assert folders["M\\xfasica"] == (3145728, 1, 0)
+        assert errors.sample == [{"path": "Fotos ni\\xf1os", "message": "read error"}]
+
+
+def test_gdu_errors_of_names_that_are_not_utf8() -> None:
+    """gdu's export writes U+FFFD for each byte that is not UTF-8 and its log a Go escape: the
+    reason in the log still reaches the folder of the export."""
+    export = (
+        b'[1,2,{"progname":"gdu"},\n[{"name":"/srv/tree","asize":4096,"dsize":4096},\n'
+        b'[{"name":"Fotos ni\xef\xbf\xbdos","asize":4096,"dsize":4096,"read_error":true}],\n'
+        b'[{"name":"a\xef\xbf\xbd\xef\xbf\xbdb","asize":4096,"dsize":4096,"read_error":true}],\n'
+        b'[{"name":"q\'uo \\"x\\"","asize":4096,"dsize":4096,"read_error":true}]]]\n'
+    )
+    log = [
+        'time="2026-11-15T22:06:14Z" level=info msg="open /srv/tree/Fotos ni\\xf1os: permission denied"',
+        'time="2026-11-15T22:06:14Z" level=info msg="open /srv/tree/a\\xe2\\x82b: permission denied"',
+        'time="2026-11-15T22:06:14Z" level=info msg="open /srv/tree/q\'uo \\"x\\": permission denied"',
+    ]
+    tree, errors = Tree(), ErrorLog()
+    reader = parse_gdu(io.BytesIO(export), job(), tree, errors, quiet())
+    gdu_errors(reader, log, errors)
+    assert errors.sample == [
+        {"path": "Fotos ni\ufffdos", "message": "permission denied"},
+        {"path": "a\ufffd\ufffdb", "message": "permission denied"},
+        {"path": 'q\'uo "x"', "message": "permission denied"},
+    ]
+
+
+def test_du_errors_name_folders_like_the_other_engines() -> None:
+    """du starts its messages with its name as it was run and quotes file names like a shell."""
+    errors = ErrorLog()
+    for line in (
+        "/usr/bin/du: cannot read directory '/srv/tree/Fotos ni'$'\\361''os': Permission denied",
+        "/usr/bin/gnudu: cannot read directory \"/srv/tree/q'uo\": Permission denied",
+        "du: cannot read directory '/srv/tree/caf'$'\\303\\251''/locked': Permission denied",
+        "du: cannot access '/srv/tree/new'$'\\n''line': No such file or directory",
+        "/usr/bin/du: fts_read failed: '/srv/tree': Input/output error",
+    ):
+        du_error(line, ROOT, errors)
+    assert [(error["path"], error["message"]) for error in errors.sample] == [
+        ("Fotos ni\\xf1os", "cannot read directory: Permission denied"),
+        ("q'uo", "cannot read directory: Permission denied"),
+        ("café/locked", "cannot read directory: Permission denied"),
+        ("new\nline", "cannot access: No such file or directory"),
+        ("", "fts_read failed: Input/output error"),
+    ]
+    assert shell_unquote("'it'\\''s'") == b"it's"
+    assert shell_unquote("\"a \\\"b\\\" \\\\ c\"") == b'a "b" \\ c'
+    assert shell_unquote("$'\\x41\\t\\101'") == b"A\tA"
 
 
 def test_commands() -> None:

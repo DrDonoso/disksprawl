@@ -1,5 +1,6 @@
 """The scan queue: one scan at a time, no duplicates, cancellation, failures and restarts."""
 
+import sys
 import time
 from pathlib import Path
 
@@ -104,6 +105,42 @@ def test_failures_are_recorded(client: TestClient, scan_root: Path, tmp_path: Pa
     failed = scan(client, directory)
     assert failed["status"] == "failed"
     assert failed["message"] == "engine_failed: boom"
+
+
+def test_a_done_line_with_text_that_is_not_utf8(client: TestClient, scan_root: Path,
+                                                tmp_path: Path) -> None:
+    """Whatever bytes a worker's lines hold, its `done` line is read and the scan completes,
+    with every text valid for the API."""
+    script = tmp_path / "worker.py"
+    script.write_text(r"""
+import json, sys
+job = json.load(open(sys.argv[1]))
+with open(job["result_path"], "w") as handle:
+    handle.write(json.dumps([0, -1, "", 3000, 3, 1]) + "\n")
+out = sys.stdout.buffer
+out.write(b'{"type": "progress", "phase": "scanning", "live": true, "dirs": 1, "files": 1,'
+          b' "bytes": 1, "current": "caf\xe9 \\udce9"}\n')
+out.write(b'{"type": "done", "total_bytes": 3000, "file_count": 3, "dir_count": 1, "entries": 1,'
+          b' "error_count": 1, "error_sample": [{"path": "ni\xf1os \\udcf1", "message": "x"}]}\n')
+out.flush()
+""")
+    use_worker(client, [sys.executable, str(script)])
+    directory = add_directory(client, scan_root)
+    done = scan(client, directory)
+    assert done["status"] == "completed", done
+    assert done["error_sample"] == [{"path": "ni\ufffdos \\xf1", "message": "x"}]
+
+
+def test_old_scans_lose_their_folders_after_a_new_one(client: TestClient, scan_root: Path,
+                                                      tmp_path: Path) -> None:
+    use_worker(client, fake_worker(tmp_path))
+    settings = {key: value for key, value in client.get("/api/settings").json().items()
+                if key != "timezone"}
+    client.put("/api/settings", json={**settings, "keep_scans": 1}, headers=WRITE)
+    directory = add_directory(client, scan_root)
+    first, second = scan(client, directory), scan(client, directory)
+    assert client.get(f"/api/scans/{first['id']}").json()["has_detail"] is False
+    assert client.get(f"/api/scans/{second['id']}").json()["has_detail"] is True
 
 
 def test_a_vanished_folder_fails_the_scan(client: TestClient, scan_root: Path) -> None:

@@ -5,6 +5,7 @@ Its folders carry cumulative sizes; on disk they include the folder's own blocks
 out from them (an apparent size counts the files only, as in GNU du).
 """
 
+import codecs
 import re
 from dataclasses import dataclass, field
 from typing import IO
@@ -17,12 +18,48 @@ from .common import (
     Tree,
     display_name,
     glob_to_regex,
-    relative,
 )
 from .export_json import Item, walk_export
 
 MAX_THREADS = 8
 LOG_ERROR = re.compile(r'msg="(?:open|lstat|stat|readdirent|readdir|read) (?P<path>.+): (?P<reason>[^"]+)"')
+GO_ESCAPE = re.compile(r"\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[0-7]{3}|.)", re.S)
+GO_SIMPLE = {"a": 7, "b": 8, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11}
+REPLACE_EACH_BYTE = "disksprawl-replace-each-byte"
+
+
+def _replace_each_byte(error: UnicodeError) -> tuple[str, int]:
+    if not isinstance(error, UnicodeDecodeError):
+        raise error
+    return "\ufffd" * (error.end - error.start), error.end
+
+
+codecs.register_error(REPLACE_EACH_BYTE, _replace_each_byte)
+
+
+def go_unquote(text: str) -> bytes:
+    """The bytes of the contents of a Go-quoted string (`%q`), as gdu's log writes paths."""
+    out = bytearray()
+    position = 0
+    for match in GO_ESCAPE.finditer(text):
+        out += text[position : match.start()].encode("utf-8", "surrogateescape")
+        escape = match[0][1:]
+        if escape[0] == "x" and len(escape) == 3:
+            out.append(int(escape[1:], 16))
+        elif escape[0] in "uU" and len(escape) > 1:
+            out += chr(int(escape[1:], 16)).encode("utf-8", "surrogatepass")
+        elif len(escape) == 3 and escape.isdigit():
+            out.append(int(escape, 8) & 0xFF)
+        else:
+            out += bytes([GO_SIMPLE[escape]]) if escape in GO_SIMPLE else escape.encode("utf-8")
+        position = match.end()
+    out += text[position:].encode("utf-8", "surrogateescape")
+    return bytes(out)
+
+
+def gdu_text(raw: bytes) -> str:
+    """A name as gdu's export writes it: each byte that is not UTF-8 becomes U+FFFD."""
+    return raw.decode("utf-8", errors=REPLACE_EACH_BYTE)
 
 
 def ignore_patterns(job: Job) -> list[str]:
@@ -136,10 +173,17 @@ def parse_gdu(
 
 def gdu_errors(reader: GduReader, log_lines: list[str], errors: ErrorLog) -> None:
     """Folders gdu could not read, with the reason it logged when there is one."""
+    root = reader.root.encode("utf-8", "surrogateescape").rstrip(b"/")
     reasons: dict[str, str] = {}
     for line in log_lines:
         match = LOG_ERROR.search(line)
-        if match:
-            reasons[relative(reader.root, match["path"])] = match["reason"]
+        if not match:
+            continue
+        raw = go_unquote(match["path"])
+        if raw == root:
+            reasons[""] = match["reason"]
+        elif raw.startswith(root + b"/"):
+            # Keyed like the export's paths, which hold U+FFFD for the bytes that are not UTF-8.
+            reasons[gdu_text(raw[len(root) + 1 :])] = match["reason"]
     for path in reader.read_errors:
         errors.add(path, reasons.get(path, "read error"))

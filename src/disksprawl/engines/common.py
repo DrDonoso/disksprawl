@@ -48,9 +48,46 @@ class Job:
 
 
 def display_name(name: str | bytes) -> str:
-    """A file name as text: bytes that are not UTF-8 become `\\xNN` escapes (never lost or merged)."""
-    raw = name if isinstance(name, bytes) else os.fsencode(name)
+    """A file name as text that is always valid UTF-8, so it can be stored and sent as JSON.
+
+    File names are bytes, and Linux does not require them to be UTF-8 (old Latin-1 names, for
+    example). Bytes that are not UTF-8 become `\\xNN` escapes, whether the name comes as bytes or as
+    the str Python makes of it (a surrogate for each such byte): `M\\xfasica`. Text that is already
+    valid comes back unchanged.
+    """
+    if isinstance(name, str):
+        if name.isascii():
+            return name
+        try:
+            raw = name.encode("utf-8", "surrogateescape")
+        except UnicodeEncodeError:
+            # Surrogates that do not stand for a byte: escape their code units.
+            raw = name.encode("utf-8", "surrogatepass")
+    else:
+        raw = name
     return raw.decode("utf-8", errors="backslashreplace")
+
+
+def clean(value: Any) -> Any:
+    """`value` (JSON-like) with every text passed through `display_name`."""
+    if isinstance(value, str):
+        return display_name(value)
+    if isinstance(value, dict):
+        return {display_name(str(key)): clean(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [clean(item) for item in value]
+    return value
+
+
+def unique_name(name: str, taken: set[str]) -> str:
+    """`name`, or `name (2)`, `name (3)`… when a sibling already has it: names that differ only
+    in bytes that are not UTF-8 can look the same (gdu writes every such byte as U+FFFD)."""
+    if name not in taken:
+        return name
+    number = 2
+    while f"{name} ({number})" in taken:
+        number += 1
+    return f"{name} ({number})"
 
 
 def glob_to_regex(pattern: str, *, any_char: str = ".") -> str:
@@ -95,7 +132,9 @@ class ErrorLog:
         with self._lock:
             self.count += 1
             if len(self.sample) < MAX_ERROR_SAMPLES:
-                self.sample.append({"path": path, "message": message[:300]})
+                self.sample.append(
+                    {"path": display_name(path), "message": display_name(message[:300])}
+                )
 
 
 def os_error_message(error: OSError) -> str:
@@ -121,6 +160,7 @@ class Tree:
         return len(self.names)
 
     def add(self, parent: int, name: str, own_bytes: int = 0) -> int:
+        name = display_name(name)
         with self.lock:
             self.parent.append(parent)
             self.names.append(name)
@@ -178,16 +218,23 @@ class Tree:
                 dirs[parent] += dirs[index] + 1
         entries: list[tuple[int, int, str, int, int | None, int]] = []
         new_index = {root: 0}
+        # Names already given to the stored children of each stored folder.
+        sibling_names: dict[int, set[str]] = {}
         for index in order:
             if index != root and (size[index] < min_bytes or self.parent[index] not in new_index):
                 continue
             new = len(entries)
             new_index[index] = new
             parent = self.parent[index]
+            name = ""
+            if index != root:
+                taken = sibling_names.setdefault(new_index[parent], set())
+                name = unique_name(self.names[index], taken)
+                taken.add(name)
             entries.append((
                 new,
                 new_index[parent] if index != root else -1,
-                self.names[index] if index != root else "",
+                name,
                 max(size[index], 0),
                 files[index] if self.count_files else None,
                 dirs[index],
@@ -237,6 +284,7 @@ class Progress:
         self._thread: threading.Thread | None = None
 
     def snapshot(self) -> dict[str, Any]:
+        current = self.current
         return {
             "type": "progress",
             "phase": self.phase,
@@ -244,12 +292,14 @@ class Progress:
             "dirs": self.dirs,
             "files": self.files,
             "bytes": self.bytes,
-            "current": self.current,
+            "current": display_name(current) if current is not None else None,
         }
 
     def emit(self, message: dict[str, Any]) -> None:
+        # ASCII JSON of clean text: whatever the names or the locale, every line reaches the server.
+        line = json.dumps(clean(message), ensure_ascii=True)
         with self._lock:
-            self.out.write(json.dumps(message, ensure_ascii=False) + "\n")
+            self.out.write(line + "\n")
             self.out.flush()
 
     def start(self) -> None:

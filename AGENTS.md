@@ -15,6 +15,10 @@ reference; these are the rules that matter most.
 - **Schema changes**: add an Alembic migration with a downgrade.
 - **Read-only**: DiskSprawl never writes to the analyzed folders. Keep the container's hardening,
   the `/data` boundary, and engines started with argument lists, never a shell.
+- **File names are bytes**: they may not be UTF-8; pass them through `display_name`
+  (`engines/common.py`) before they reach the tree, errors, progress or the API.
+- **SQLite has one writer**: keep write transactions short; never call the file system (statvfs,
+  resolving paths) inside one, and delete large sets of rows in batches (`retention.py`).
 - **Synthetic data only**: no real folder names, host names, addresses or personal data in code,
   tests, fixtures, docs or screenshots; use generic paths such as `/mnt/storage`.
 - **CI**: the required check is the job `application` in `.github/workflows/ci.yml`; keep its

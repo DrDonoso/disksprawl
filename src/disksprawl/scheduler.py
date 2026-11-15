@@ -1,12 +1,14 @@
 """Scheduled work with APScheduler: each directory's cron and the capacity measurements."""
 
 import logging
+import threading
 from datetime import datetime, timedelta
 
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from . import capacity, cron, settings_store
@@ -21,6 +23,10 @@ GRACE = timedelta(hours=1)
 CAPACITY_JOB = "capacity"
 # Capacity samples older than this are deleted (the history chart shows a year at most).
 CAPACITY_RETENTION = timedelta(days=400)
+# A scheduled scan that cannot be queued because the database is busy is tried again, this many
+# times, this many seconds apart, instead of being lost.
+ENQUEUE_ATTEMPTS = 3
+ENQUEUE_RETRY_SECONDS = 10.0
 
 
 def scan_job_id(directory_id: int) -> str:
@@ -40,6 +46,7 @@ class Scheduler:
                 "misfire_grace_time": int(GRACE.total_seconds()),
             },
         )
+        self._stopping = threading.Event()
 
     def start(self) -> None:
         self.scheduler.start()
@@ -52,6 +59,7 @@ class Scheduler:
         self.catch_up()
 
     def shutdown(self) -> None:
+        self._stopping.set()
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
 
@@ -89,39 +97,87 @@ class Scheduler:
         )
 
     def catch_up(self) -> None:
-        """Queues the scans whose scheduled time passed in the last hour while the app was down."""
+        """Queues the scans whose scheduled time passed in the last hour while the app was down.
+
+        A failure is logged: it never stops the app from starting."""
         now = utcnow()
-        with self.sessions() as db:
-            directories = db.scalars(
-                select(Directory).where(Directory.enabled.is_(True), Directory.cron.is_not(None))
-            ).all()
-            for directory in directories:
-                last = db.scalar(
-                    select(func.max(Scan.queued_at)).where(Scan.directory_id == directory.id)
-                )
-                since = max(last, now - GRACE) if last else now - GRACE
-                if directory.cron and cron.missed_run(directory.cron, self.config.zone, since, now):
-                    log.info("Queuing a missed scheduled scan of directory %s", directory.id)
-                    self.scanner.enqueue(directory.id, "scheduled")
+        due: list[int] = []
+        try:
+            with self.sessions() as db:
+                directories = db.scalars(
+                    select(Directory).where(
+                        Directory.enabled.is_(True), Directory.cron.is_not(None)
+                    )
+                ).all()
+                for directory in directories:
+                    last = db.scalar(
+                        select(func.max(Scan.queued_at)).where(Scan.directory_id == directory.id)
+                    )
+                    since = max(last, now - GRACE) if last else now - GRACE
+                    if directory.cron and cron.missed_run(
+                        directory.cron, self.config.zone, since, now
+                    ):
+                        due.append(directory.id)
+        except Exception:
+            log.exception("Missed scheduled scans could not be checked")
+            return
+        for directory_id in due:
+            log.info("Queuing a missed scheduled scan of directory %s", directory_id)
+            try:
+                self.scanner.enqueue(directory_id, "scheduled")
+            except Exception:
+                log.exception("The missed scan of directory %s could not be queued", directory_id)
 
     def _scheduled_scan(self, directory_id: int) -> None:
-        with self.sessions() as db:
-            directory = db.get(Directory, directory_id)
-            if directory is None or not directory.enabled:
+        for attempt in range(1, ENQUEUE_ATTEMPTS + 1):
+            try:
+                with self.sessions() as db:
+                    directory = db.get(Directory, directory_id)
+                    if directory is None or not directory.enabled:
+                        return
+                self.scanner.enqueue(directory_id, "scheduled")
                 return
-        self.scanner.enqueue(directory_id, "scheduled")
+            except OperationalError:
+                if attempt == ENQUEUE_ATTEMPTS:
+                    raise
+                log.warning(
+                    "The database is busy: the scheduled scan of directory %s waits %s s",
+                    directory_id,
+                    ENQUEUE_RETRY_SECONDS,
+                )
+                if self._stopping.wait(ENQUEUE_RETRY_SECONDS):
+                    return
 
     def measure_directory(self, directory_id: int) -> None:
-        with transaction(self.sessions) as db:
+        with self.sessions() as db:
             directory = db.get(Directory, directory_id)
-            if directory is not None:
-                capacity.sample(db, directory, self.config.scan_root)
+            path = directory.path if directory is not None else None
+        if path is None:
+            return
+        # Measured outside any transaction: a slow volume must not hold the database.
+        volume = capacity.measure_folder(path, self.config.scan_root, directory_id)
+        if volume is None:
+            return
+        with transaction(self.sessions) as db:
+            if db.get(Directory, directory_id) is not None:
+                capacity.store(db, directory_id, volume)
 
     def measure_capacity(self) -> None:
         try:
+            with self.sessions() as db:
+                directories = db.execute(select(Directory.id, Directory.path)).all()
+            # Each volume is measured outside any transaction, with a time limit: a slow or hung
+            # network share must neither hold the database nor stop the other measurements.
+            measured = []
+            for directory_id, path in directories:
+                volume = capacity.measure_folder(path, self.config.scan_root, directory_id)
+                if volume is not None:
+                    measured.append((directory_id, volume))
             with transaction(self.sessions) as db:
-                for directory in db.scalars(select(Directory)).all():
-                    capacity.sample(db, directory, self.config.scan_root)
+                existing = set(db.scalars(select(Directory.id)))
+                for directory_id, volume in measured:
+                    if directory_id in existing:
+                        capacity.store(db, directory_id, volume)
                 db.execute(
                     delete(CapacitySample).where(
                         CapacitySample.measured_at < utcnow() - CAPACITY_RETENTION

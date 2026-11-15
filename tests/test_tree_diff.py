@@ -1,41 +1,13 @@
 """Folder trees, changes between scans and retention, on scans stored directly."""
 
-import json
-from datetime import timedelta
 from pathlib import Path
 
-from conftest import OPTIONS, add_directory
+from conftest import add_directory, record
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from disksprawl.db import PathNode, Scan, ScanEntry, transaction, utcnow
-from disksprawl.scanning import apply_retention, import_entries
-
-
-def record(client: TestClient, directory: int, sizes: dict[str, int], tmp_path: Path,
-           days_ago: float = 0) -> int:
-    """Stores a completed scan whose folders have these sizes ('' is the root)."""
-    ordered = sorted(sizes, key=lambda path: (path.count("/") if path else -1, path))
-    index = {path: number for number, path in enumerate(ordered)}
-    result = tmp_path / f"result-{len(list(tmp_path.glob('result-*')))}.jsonl"
-    with open(result, "w", encoding="utf-8") as handle:
-        for path in ordered:
-            parent = path.rsplit("/", 1)[0] if "/" in path else ""
-            handle.write(json.dumps([
-                index[path], index[parent] if path else -1, path.rsplit("/", 1)[-1],
-                sizes[path], 1, path.count("/"),
-            ]) + "\n")
-    moment = utcnow() - timedelta(days=days_ago)
-    with transaction(client.app.state.sessions) as db:  # type: ignore[attr-defined]
-        scan = Scan(directory_id=directory, status="completed", trigger="manual", engine="native",
-                    options=OPTIONS, queued_at=moment, started_at=moment,
-                    finished_at=moment, total_bytes=sizes[""], dir_count=len(sizes) - 1,
-                    error_count=0, error_sample=[], has_detail=True)
-        db.add(scan)
-        db.flush()
-        import_entries(db, scan.id, directory, result)
-        return scan.id
-
+from disksprawl import retention
+from disksprawl.db import PathNode, Scan, ScanEntry
 
 BEFORE = {"": 1000, "media": 600, "media/movies": 500, "old": 300, "docs": 50}
 AFTER = {"": 1300, "media": 1100, "media/movies": 500, "media/series": 550, "docs": 50}
@@ -95,8 +67,8 @@ def test_retention_keeps_the_latest_detailed_scans(client: TestClient, scan_root
     middle = record(client, directory, BEFORE, tmp_path, days_ago=2)
     latest = record(client, directory, AFTER, tmp_path, days_ago=1)
     sessions = client.app.state.sessions  # type: ignore[attr-defined]
-    with transaction(sessions) as db:
-        apply_retention(db, directory, 2)
+    # Batches of two rows: every deletion takes several transactions.
+    retention.prune(sessions, directory, 2, batch=2)
     with sessions() as db:
         detail = dict(db.execute(select(Scan.id, Scan.has_detail)).all())
         assert detail == {old: False, middle: True, latest: True}

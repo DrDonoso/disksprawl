@@ -17,6 +17,7 @@ machine and the storage, and what progress they can report while they run.
 - [Low priority](#low-priority)
 - [What is measured](#what-is-measured)
 - [Exclusions](#exclusions)
+- [Names that are not UTF-8](#names-that-are-not-utf-8)
 - [Progress and estimates](#progress-and-estimates)
 - [What is stored](#what-is-stored)
 - [Engine versions](#engine-versions)
@@ -189,6 +190,20 @@ often what fills the disk.
 
 Patterns cannot contain `/`, `\`, `[` or `]`. DiskSprawl translates them for each engine:
 `--exclude` for du and ncdu, and anchored regular expressions in an ignore file for gdu.
+
+## Names that are not UTF-8
+
+Linux file names are bytes, and nothing requires them to be UTF-8: names written by old systems in
+Latin-1 or another legacy encoding are common on long-lived shares. DiskSprawl scans them like any
+other name and shows each byte that is not UTF-8 as an escape: a folder named `Música` in Latin-1
+appears as `M\xfasica`. gdu replaces each such byte with `�` itself, so its scans show `M�sica`,
+and the **Changes** view between a gdu scan and a scan by another engine lists those folders as
+removed and added. In the rare case that two names in the same folder look the same after this,
+the second one gets a number, such as `M�sica (2)`.
+
+The folder picker leaves such folders out, because they cannot be named in a request: add their
+parent folder instead, whose scans include them. Over SMB the names arrive as UTF-8 when the share
+is mounted with `iocharset=utf8`; over NFS and on local disks they are the bytes stored.
 
 ## Progress and estimates
 

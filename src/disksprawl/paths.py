@@ -10,9 +10,18 @@ from .errors import AppError
 MAX_BROWSE_ENTRIES = 2000
 
 
+def is_text(value: str) -> bool:
+    """Whether a name is valid UTF-8 (Python keeps the other bytes of file names as surrogates)."""
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def normalize(path: str) -> str:
     """An absolute path without `.`, `..`, repeated or trailing slashes (lexically)."""
-    if not path or "\0" in path or not path.startswith("/"):
+    if not path or "\0" in path or not path.startswith("/") or not is_text(path):
         raise AppError("path_invalid", fields={"path": "path_invalid"})
     return posixpath.normpath(path) if path != "/" else "/"
 
@@ -41,6 +50,8 @@ def browse(path: str | None, scan_root: Path) -> tuple[str, str | None, list[tup
     """(folder, parent, [(name, path)…]) of the subfolders of a folder inside the scan root.
 
     Paths are shown as typed below the root (`/data/media`), never as their resolved targets.
+    Folders whose name is not valid UTF-8 are left out: no request can name them, so they cannot
+    be added as directories (their parent can, and its scans include them).
     """
     root_text = normalize(str(scan_root))
     folder = normalize(path) if path else root_text
@@ -51,6 +62,8 @@ def browse(path: str | None, scan_root: Path) -> tuple[str, str | None, list[tup
     try:
         with os.scandir(real) as listing:
             for entry in listing:
+                if not is_text(entry.name):
+                    continue
                 try:
                     if not entry.is_dir(follow_symlinks=True):
                         continue

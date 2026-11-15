@@ -139,6 +139,15 @@ like `df`. On a share it is what the NAS reports for it: usually the size of its
 be a quota of the share or of the user. Directories on the same mount are recognized as the same
 volume.
 
+**When the NAS does not answer**: with the default `hard` mounts, every access to a share whose
+server is off or restarting waits until it is back. DiskSprawl keeps working meanwhile: each
+capacity measurement gives up after 10 seconds (the log says which directory did not answer) and
+is tried again once the share answers, and the rest of the interface, the queue and the schedules
+are not held up. A scan of that share waits for it until you cancel it.
+
+**File names**: names that are not valid UTF-8, such as Latin-1 names written by old systems, are
+shown with `\xNN` escapes; see [scan engines](engines.md#names-that-are-not-utf-8).
+
 ## Proxmox LXC and a NAS
 
 A common setup is a small unprivileged LXC container on a Proxmox host, running Docker, next to a
@@ -295,4 +304,6 @@ whether the container is healthy.
 | An engine is disabled in the settings | It was not found or did not answer `--version`: the log says why. The official image includes all four. |
 | The volume size differs from the NAS | Over SMB or NFS the NAS reports the share's capacity, which may be a quota. |
 | The NAS is slow during scans | Use fewer threads and the *Balanced* or *Gentle* pace, or schedule the scan at night. |
+| The volume card of a share stops updating, and the log says a volume "did not answer" | The NAS was off or did not answer within 10 seconds; the volume is measured again once it answers. |
+| Folder names show `\xNN` escapes | Those names are not UTF-8 (Latin-1, for example); see [names that are not UTF-8](engines.md#names-that-are-not-utf-8). |
 | A scan takes much longer than before | Compare the engine and options in the history; a pace or thread change, or a busy NAS, explain most cases. |

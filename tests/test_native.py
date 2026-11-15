@@ -1,6 +1,7 @@
 """The native engine and the folder tree it builds."""
 
 import io
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +9,15 @@ from pathlib import Path
 import pytest
 from conftest import running_as_root, write_tree
 
-from disksprawl.engines.common import ErrorLog, Excluder, Job, Progress, Tree
+from disksprawl.engines.common import (
+    ErrorLog,
+    Excluder,
+    Job,
+    Progress,
+    Tree,
+    display_name,
+    read_result,
+)
 from disksprawl.engines.native import rest_ratio, scan_native
 
 
@@ -183,3 +192,56 @@ def test_finalize_keeps_large_folders_with_their_parents() -> None:
         ("", 5011), ("big", 5000), ("deep", 5000)
     ]
     assert (result.total_bytes, result.file_count, result.dir_count) == (5011, 3, 3)
+
+
+def test_names_that_are_not_utf8(tmp_path: Path) -> None:
+    """Linux names are bytes, not always UTF-8 (old Latin-1 names): the tree, the errors, the
+    progress and the result file get them as valid text with `\\xNN` escapes."""
+    root = os.fsencode(tmp_path / "tree")
+    music = os.path.join(root, b"M\xfasica")
+    os.makedirs(os.path.join(music, b"Cl\xe1sica"))
+    with open(os.path.join(music, b"Cl\xe1sica", b"song\xff.flac"), "wb") as handle:
+        handle.truncate(3 * 2**20)
+    os.makedirs(os.path.join(root, b"Fotos ni\xf1os"))
+
+    def scandir(path: str):  # noqa: ANN202 - os.scandir's iterator
+        if os.fsencode(path).endswith(b"Fotos ni\xf1os"):
+            raise PermissionError(13, "Permission denied")
+        return os.scandir(path)
+
+    job = Job(engine="native", root=str(tmp_path / "tree"),
+              result_path=str(tmp_path / "result.jsonl"), min_entry_bytes=2**20)
+    out = io.StringIO()
+    progress = Progress(out)
+    tree, errors = Tree(), ErrorLog()
+    scan_native(job, tree, errors, progress, sleep=lambda seconds: None, scandir=scandir)
+    progress.stop()
+    result = tree.finalize(job.min_entry_bytes)
+    result.write(job.result_path)
+    stored = [(name, size) for _, _, name, size, _, _ in read_result(job.result_path)]
+    assert stored == [("", 3 * 2**20), ("M\\xfasica", 3 * 2**20), ("Cl\\xe1sica", 3 * 2**20)]
+    assert errors.sample == [{"path": "Fotos ni\\xf1os", "message": "Permission denied"}]
+    # Progress lines are ASCII JSON, whatever the names and the locale.
+    lines = out.getvalue().splitlines()
+    assert lines and all(line.isascii() for line in lines)
+    assert json.loads(lines[-1])["current"] in ("", "M\\xfasica", "M\\xfasica/Cl\\xe1sica",
+                                                "Fotos ni\\xf1os")
+
+
+def test_display_name() -> None:
+    assert display_name(b"M\xfasica") == display_name("M\udcfasica") == "M\\xfasica"
+    assert display_name(b"caf\xc3\xa9") == display_name("café") == "café"
+    # Clean text is never changed again; a surrogate that stands for no byte is escaped too.
+    assert display_name("M\\xfasica") == "M\\xfasica"
+    assert display_name("a\ud800") == "a\\xed\\xa0\\x80"
+
+
+def test_names_that_look_the_same_stay_apart() -> None:
+    """Two folders whose names differ only in bytes that are not UTF-8 can look the same (gdu
+    writes each as U+FFFD): the second one gets a number, so both are stored."""
+    tree = Tree()
+    root = tree.add(-1, "")
+    for name in ("M\ufffdsica", "M\ufffdsica", "M\ufffdsica (2)"):
+        tree.add_file(tree.add(root, name), 10)
+    names = [entry[2] for entry in tree.finalize(0).entries[1:]]
+    assert names == ["M\ufffdsica", "M\ufffdsica (2)", "M\ufffdsica (2) (2)"]

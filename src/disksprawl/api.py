@@ -14,7 +14,7 @@ from .config import Settings
 from .db import Directory, Scan, transaction, utcnow
 from .engines import EngineInfo
 from .errors import AppError
-from .scanning import Scanner, apply_retention
+from .scanning import Scanner
 from .scheduler import Scheduler
 from .schemas import (
     AuthStatusOut,
@@ -255,17 +255,9 @@ def update_directory(directory_id: int, body: DirectoryIn, request: Request) -> 
 def delete_directory(directory_id: int, request: Request) -> None:
     with request.app.state.sessions() as db:
         queries.get_directory(db, directory_id)
-        running = db.scalar(
-            select(Scan.id).where(Scan.directory_id == directory_id, Scan.status == "running")
-        )
     scheduler(request).remove(directory_id)
-    if running is not None:
-        scanner(request).cancel(running)
-    # Only DiskSprawl's own records go: the folder and its files are never touched.
-    with transaction(request.app.state.sessions) as db:
-        directory = db.get(Directory, directory_id)
-        if directory is not None:
-            db.delete(directory)
+    # Only DiskSprawl's own records go, in batches: the folder and its files are never touched.
+    scanner(request).forget(directory_id)
 
 
 @router.post("/directories/{directory_id}/scan", response_model=ProgressOut, status_code=202)
@@ -362,9 +354,11 @@ def put_settings(body: SettingsIn, request: Request) -> SettingsOut:
     with transaction(request.app.state.sessions) as db:
         before = settings_store.load(db)
         values = settings_store.save(db, body.model_dump())
-        if values["keep_scans"] < before["keep_scans"]:
-            for identifier in db.scalars(select(Directory.id)).all():
-                apply_retention(db, identifier, values["keep_scans"])
+        directory_ids = db.scalars(select(Directory.id)).all()
+    if values["keep_scans"] < before["keep_scans"]:
+        # In batches, outside the settings' transaction: a large history takes a while to delete.
+        for identifier in directory_ids:
+            scanner(request).prune(identifier, values["keep_scans"])
     if values["capacity_interval_minutes"] != before["capacity_interval_minutes"]:
         scheduler(request).schedule_capacity(values["capacity_interval_minutes"])
     return settings_out(request, values)

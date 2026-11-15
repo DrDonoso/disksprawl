@@ -20,14 +20,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import capacity, settings_store
+from . import capacity, retention, settings_store
 from .config import Settings
-from .db import Directory, PathNode, Scan, ScanEntry, transaction, utcnow
+from .db import Directory, Scan, transaction, utcnow
 from .engines import EngineInfo
-from .engines.common import Job, read_result
+from .engines.common import Job, clean, read_result
 from .errors import AppError
 from .paths import resolve
 
@@ -37,6 +38,12 @@ ACTIVE = ("queued", "running")
 MIB = 1024 * 1024
 # Seconds a cancelled worker gets to stop before it is killed.
 STOP_GRACE = 5.0
+# Storing a finished scan is tried this many times while the database stays busy (each attempt
+# already waits for SQLite's busy timeout), with these seconds between attempts, doubling.
+STORE_ATTEMPTS = 4
+RETRY_SECONDS = 1.0
+# Longest wait between two attempts to record how a scan ended.
+MAX_RETRY_SECONDS = 60.0
 
 
 def options_of(directory: Directory) -> dict[str, Any]:
@@ -120,6 +127,11 @@ class Scanner:
         self._lock = threading.Lock()
         self._cancel_requests: set[int] = set()
         self._live: Live | None = None
+        # The scan the worker thread claimed: any other scan marked running was left so by a
+        # failure.
+        self._current: int | None = None
+        # Storing a scan, pruning old ones and deleting a directory never overlap: they share paths.
+        self._storage_lock = threading.Lock()
         self._thread: threading.Thread | None = None
         # The scan worker; tests replace it with a scripted one.
         self.worker_command = [sys.executable, "-m", "disksprawl.engines"]
@@ -151,13 +163,15 @@ class Scanner:
     def enqueue(self, directory_id: int, trigger: str) -> int:
         """Queues a scan of the directory, unless one is already queued or running (its id)."""
         with self._lock, transaction(self.sessions) as db:
-            existing = db.scalars(
-                select(Scan.id)
+            for existing in db.scalars(
+                select(Scan)
                 .where(Scan.directory_id == directory_id, Scan.status.in_(ACTIVE))
                 .order_by(Scan.id)
-            ).first()
-            if existing is not None:
-                return existing
+            ):
+                if self._stale(existing):
+                    self._close(existing, "failed", "internal_error")
+                    continue
+                return existing.id
             directory = db.get(Directory, directory_id)
             if directory is None:
                 raise AppError("directory_not_found", 404)
@@ -183,7 +197,8 @@ class Scanner:
             scan = db.get(Scan, scan_id)
             if scan is None:
                 raise AppError("scan_not_found", 404)
-            if scan.status == "queued":
+            if scan.status == "queued" or self._stale(scan):
+                # Nothing runs it: a queued scan, or one a failure left marked as running.
                 self._close(scan, "cancelled", None)
                 return
             if scan.status != "running":
@@ -197,6 +212,33 @@ class Scanner:
     def live(self) -> Live | None:
         return self._live
 
+    def prune(self, directory_id: int, keep: int) -> None:
+        """Keeps the folders of the latest `keep` completed scans of a directory (in batches)."""
+        with self._storage_lock:
+            retention.prune(self.sessions, directory_id, keep)
+
+    def forget(self, directory_id: int) -> None:
+        """Deletes a directory and everything stored about it (never its files): its queued and
+        running scans stop first, then its records go in batches."""
+        with self._lock, transaction(self.sessions) as db:
+            for scan in db.scalars(
+                select(Scan).where(Scan.directory_id == directory_id, Scan.status.in_(ACTIVE))
+            ):
+                if scan.status == "queued" or self._stale(scan):
+                    self._close(scan, "cancelled", None)
+                else:
+                    self._cancel_requests.add(scan.id)
+        live = self._live
+        if live is not None and live.directory_id == directory_id:
+            live.cancel = True
+            self._terminate(live)
+        with self._storage_lock:
+            retention.delete_directory(self.sessions, directory_id)
+
+    def _stale(self, scan: Scan) -> bool:
+        """A scan marked running that the worker thread is not running (call with `_lock` held)."""
+        return scan.status == "running" and scan.id != self._current
+
     def queue_positions(self, db: Session) -> dict[int, int]:
         """Position in the queue (1 is next) of every queued scan."""
         queued = db.scalars(
@@ -207,40 +249,54 @@ class Scanner:
     # The worker thread
 
     def _loop(self) -> None:
+        # Nothing may end this thread but stop(): without it the queue would wait for a restart.
         while not self._stopping.is_set():
             try:
-                scan_id = self._claim()
+                self._next()
             except Exception:
-                log.exception("The scan queue could not be read")
-                scan_id = None
-            if scan_id is None:
-                self._wake.wait(5)
-                self._wake.clear()
-                continue
-            try:
-                self._run(scan_id)
-            except Exception:
-                log.exception("Scan %s failed unexpectedly", scan_id)
-                self._fail(scan_id, "internal_error")
-            finally:
+                log.exception("The scan queue failed; trying again")
+                self._stopping.wait(5)
+
+    def _next(self) -> None:
+        self._wake.clear()
+        scan_id = self._claim()
+        if scan_id is None:
+            self._wake.wait(5)
+            return
+        try:
+            self._run(scan_id)
+        except Exception:
+            log.exception("Scan %s failed unexpectedly", scan_id)
+            self._fail(scan_id, "internal_error")
+        finally:
+            with self._lock:
                 self._live = None
+                self._current = None
                 self._cancel_requests.discard(scan_id)
-                if self.on_finished is not None:
-                    try:
-                        self.on_finished(scan_id)
-                    except Exception:
-                        log.exception("After-scan hook failed")
+            if self.on_finished is not None:
+                try:
+                    self.on_finished(scan_id)
+                except Exception:
+                    log.exception("After-scan hook failed")
 
     def _claim(self) -> int | None:
-        with self._lock, transaction(self.sessions) as db:
-            scan = db.scalars(
-                select(Scan).where(Scan.status == "queued").order_by(Scan.queued_at, Scan.id)
-            ).first()
-            if scan is None:
-                return None
-            scan.status = "running"
-            scan.started_at = utcnow()
-            return scan.id
+        with self._lock:
+            with transaction(self.sessions) as db:
+                # No scan runs between two claims: one still marked running was left so when
+                # recording its end failed.
+                for stale in db.scalars(select(Scan).where(Scan.status == "running")):
+                    log.warning("Scan %s was left running; it is recorded as failed", stale.id)
+                    self._close(stale, "failed", "internal_error")
+                scan = db.scalars(
+                    select(Scan).where(Scan.status == "queued").order_by(Scan.queued_at, Scan.id)
+                ).first()
+                if scan is None:
+                    return None
+                scan.status = "running"
+                scan.started_at = utcnow()
+                claimed = scan.id
+            self._current = claimed
+            return claimed
 
     def _close(self, scan: Scan, status: str, message: str | None) -> None:
         now = utcnow()
@@ -251,10 +307,21 @@ class Scanner:
             scan.duration_seconds = round((now - scan.started_at).total_seconds(), 3)
 
     def _fail(self, scan_id: int, message: str, status: str = "failed") -> None:
-        with transaction(self.sessions) as db:
-            scan = db.get(Scan, scan_id)
-            if scan is not None and scan.status == "running":
-                self._close(scan, status, message)
+        """Records how a scan ended. While the database fails (busy for longer than its timeout,
+        for example) it tries again, and the queue waits: the scan never stays running."""
+        delay = RETRY_SECONDS
+        while True:
+            try:
+                with transaction(self.sessions) as db:
+                    scan = db.get(Scan, scan_id)
+                    if scan is not None and scan.status == "running":
+                        self._close(scan, status, message)
+                return
+            except Exception:
+                log.exception("Scan %s could not be recorded as %s; trying again", scan_id, status)
+                if self._stopping.wait(delay):
+                    return
+                delay = min(delay * 2, MAX_RETRY_SECONDS)
 
     def _terminate(self, live: Live) -> None:
         process = live.process
@@ -351,7 +418,13 @@ class Scanner:
                 self._fail(scan_id, detail or "scan_failed")
             else:
                 live.phase = "saving"
-                self._store(scan_id, directory_id, root, result_path, outcome)
+                keep = self._store_patiently(scan_id, directory_id, path, result_path, outcome)
+                if keep is not None:
+                    try:
+                        self.prune(directory_id, keep)
+                    except Exception:
+                        # The scan is stored; the next one prunes again.
+                        log.exception("Old scans of directory %s could not be pruned", directory_id)
         finally:
             for leftover in (job_path, result_path):
                 leftover.unlink(missing_ok=True)
@@ -385,8 +458,11 @@ class Scanner:
         assert process.stdout is not None
         for raw in process.stdout:
             try:
-                message = json.loads(raw)
+                # Any text the worker sends must be valid UTF-8, or the `done` line would be lost.
+                message = clean(json.loads(raw.decode("utf-8", "replace")))
             except ValueError:
+                continue
+            if not isinstance(message, dict):
                 continue
             kind = message.get("type")
             if kind == "progress":
@@ -425,13 +501,33 @@ class Scanner:
                 log.warning("Scan worker %s failed:\n%s", live.scan_id, "\n".join(tail))
         return None, failure
 
+    def _store_patiently(
+        self, scan_id: int, directory_id: int, path: str, result_path: Path, done: dict[str, Any]
+    ) -> int | None:
+        """`_store`, tried again while the database stays busy: an hour of scanning is not lost
+        to a moment of contention. Returns the scans to keep, or None when nothing was stored."""
+        delay = RETRY_SECONDS
+        for attempt in range(1, STORE_ATTEMPTS + 1):
+            try:
+                return self._store(scan_id, directory_id, path, result_path, done)
+            except OperationalError:
+                if attempt == STORE_ATTEMPTS or self._stopping.is_set():
+                    raise
+                log.warning("Scan %s could not be stored yet; trying again", scan_id, exc_info=True)
+                if self._stopping.wait(delay):
+                    raise
+                delay *= 2
+        return None
+
     def _store(
-        self, scan_id: int, directory_id: int, root: Path, result_path: Path, done: dict[str, Any]
-    ) -> None:
-        with transaction(self.sessions) as db:
+        self, scan_id: int, directory_id: int, path: str, result_path: Path, done: dict[str, Any]
+    ) -> int | None:
+        # Measured before the transaction: statvfs of a network share can be slow.
+        volume = capacity.measure_folder(path, self.config.scan_root, directory_id)
+        with self._storage_lock, transaction(self.sessions) as db:
             scan = db.get(Scan, scan_id)
             if scan is None or scan.status != "running":
-                return
+                return None
             import_entries(db, scan_id, directory_id, result_path)
             scan.total_bytes = int(done["total_bytes"])
             file_count = done.get("file_count")
@@ -440,19 +536,14 @@ class Scanner:
             scan.error_count = int(done.get("error_count") or 0)
             scan.error_sample = list(done.get("error_sample") or [])
             scan.has_detail = True
-            try:
-                volume = capacity.measure(root)
-            except OSError:
-                volume = None
             if volume is not None:
                 scan.capacity_total = volume.total
                 scan.capacity_used = volume.used
                 scan.capacity_free = volume.free
+                capacity.store(db, directory_id, volume)
             self._close(scan, "completed", None)
-            directory = db.get(Directory, directory_id)
-            if directory is not None:
-                capacity.sample(db, directory, self.config.scan_root)
-            apply_retention(db, directory_id, settings_store.load(db)["keep_scans"])
+            keep: int = settings_store.load(db)["keep_scans"]
+            return keep
 
 
 def import_entries(db: Session, scan_id: int, directory_id: int, result_path: Path) -> int:
@@ -483,30 +574,6 @@ def import_entries(db: Session, scan_id: int, directory_id: int, result_path: Pa
         rows,
     )
     return len(rows)
-
-
-def apply_retention(db: Session, directory_id: int, keep: int) -> None:
-    """Keeps the folders of the latest `keep` completed scans; older scans keep their summary."""
-    detailed = db.scalars(
-        select(Scan.id)
-        .where(Scan.directory_id == directory_id, Scan.has_detail.is_(True))
-        .order_by(Scan.finished_at.desc(), Scan.id.desc())
-    ).all()
-    expired = list(detailed[keep:])
-    if not expired:
-        return
-    db.execute(delete(ScanEntry).where(ScanEntry.scan_id.in_(expired)))
-    db.execute(update(Scan).where(Scan.id.in_(expired)).values(has_detail=False))
-    referenced = (
-        select(ScanEntry.path_id)
-        .join(Scan, Scan.id == ScanEntry.scan_id)
-        .where(Scan.directory_id == directory_id)
-    )
-    db.execute(
-        delete(PathNode).where(
-            PathNode.directory_id == directory_id, PathNode.id.not_in(referenced)
-        )
-    )
 
 
 def elapsed_since(moment: datetime | None) -> float:

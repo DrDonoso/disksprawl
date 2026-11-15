@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,8 @@ from fastapi.testclient import TestClient
 
 from disksprawl.app import create_app
 from disksprawl.config import Settings
+from disksprawl.db import Scan, transaction, utcnow
+from disksprawl.scanning import import_entries
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -122,3 +125,28 @@ def load_fixture(name: str) -> bytes:
 def result_rows(path: str) -> list[list[object]]:
     with open(path, encoding="utf-8") as handle:
         return [json.loads(line) for line in handle]
+
+
+def record(client: TestClient, directory: int, sizes: dict[str, int], tmp_path: Path,
+           days_ago: float = 0) -> int:
+    """Stores a completed scan whose folders have these sizes ('' is the root)."""
+    ordered = sorted(sizes, key=lambda path: (path.count("/") if path else -1, path))
+    index = {path: number for number, path in enumerate(ordered)}
+    result = tmp_path / f"result-{len(list(tmp_path.glob('result-*')))}.jsonl"
+    with open(result, "w", encoding="utf-8") as handle:
+        for path in ordered:
+            parent = path.rsplit("/", 1)[0] if "/" in path else ""
+            handle.write(json.dumps([
+                index[path], index[parent] if path else -1, path.rsplit("/", 1)[-1],
+                sizes[path], 1, path.count("/"),
+            ]) + "\n")
+    moment = utcnow() - timedelta(days=days_ago)
+    with transaction(client.app.state.sessions) as db:  # type: ignore[attr-defined]
+        scan = Scan(directory_id=directory, status="completed", trigger="manual", engine="native",
+                    options=OPTIONS, queued_at=moment, started_at=moment,
+                    finished_at=moment, total_bytes=sizes[""], dir_count=len(sizes) - 1,
+                    error_count=0, error_sample=[], has_detail=True)
+        db.add(scan)
+        db.flush()
+        import_entries(db, scan.id, directory, result)
+        return scan.id
