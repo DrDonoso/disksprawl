@@ -35,6 +35,8 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \
     uv sync --locked --no-dev --no-install-project
 COPY README.md LICENSE ./
+# The licenses of ncdu, gdu and the rest of the third-party software in the image.
+COPY licenses/ ./licenses/
 COPY src/ ./src/
 # Building the project leaves build/ and an .egg-info in the source tree; the venv has the copy.
 RUN --mount=from=uv,source=/uv,target=/usr/local/bin/uv \

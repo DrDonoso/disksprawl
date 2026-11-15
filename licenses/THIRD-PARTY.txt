@@ -1,0 +1,30 @@
+Third-party software in the DiskSprawl image
+============================================
+
+DiskSprawl itself is distributed under the MIT license (LICENSE). Its Docker image also contains
+the following programs, unmodified, under their own licenses.
+
+ncdu 2.9.1 - /usr/local/bin/ncdu
+  The NCurses Disk Usage analyzer by Yorhel, https://dev.yorhel.nl/ncdu
+  License: MIT, see ncdu.txt.
+  The official static build, downloaded from https://dev.yorhel.nl/download and verified by its
+  SHA-256 checksum (scripts/install-engines.sh). It statically links ncurses (X11/MIT license) and
+  zstd (BSD license); their sources and notices are published by their projects.
+
+gdu 5.39.0 - /usr/local/bin/gdu
+  Go DiskUsage() by Daniel Milde, https://github.com/dundee/gdu
+  License: MIT, see gdu.txt.
+  The official static build from https://github.com/dundee/gdu/releases, verified by its SHA-256
+  checksum. It is a Go program; `go version -m /usr/local/bin/gdu` lists the Go modules it
+  contains, under the MIT, BSD and Apache 2.0 licenses of their projects.
+
+du and nice (GNU coreutils), ionice (util-linux) and the other Debian packages of the python
+base image
+  Their licenses are in /usr/share/doc/<package>/copyright.
+
+Python 3.14
+  Its license is in /usr/local/lib/python3.14/LICENSE.txt.
+
+The Python packages DiskSprawl uses are listed in uv.lock; their licenses are in their metadata
+under /app/.venv/lib/python3.14/site-packages/*.dist-info. The web interface bundles the npm
+packages listed in frontend/package-lock.json.
