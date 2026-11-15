@@ -1,0 +1,91 @@
+name: Bug report
+description: Report something in DiskSprawl that does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem.
+
+        **Do not report security vulnerabilities here.** Follow the [security policy](https://github.com/DrDonoso/disksprawl/security/policy) and report them privately.
+
+        Folder and file names can be personal: **replace them with made-up ones** in everything you paste or attach, and do not include host names, IP addresses or passwords.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact steps that trigger the problem.
+      placeholder: |
+        1. Add /data/media with the ncdu engine and 4 threads.
+        2. Press "Scan now".
+        3. See the error.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead, including any message shown in the interface.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or image tag
+      description: The image tag you run, or the version returned by `/api/version`.
+      placeholder: drdonoso/disksprawl:20261115
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Docker Compose with docker-compose.yml
+        - Docker Compose with docker-compose.local.yml (local try-out)
+        - Another container setup (Proxmox LXC, Kubernetes…)
+        - From source (development)
+        - The public demo
+    validations:
+      required: true
+  - type: textarea
+    id: storage
+    attributes:
+      label: Storage
+      description: What the analyzed folders are (local disk, NFS or SMB share…), how they are mounted, the engine and its options.
+      placeholder: |
+        NFS share from a NAS, mounted on the host and bind-mounted read-only into /data/storage.
+        Engine: gdu, 4 threads, balanced pace.
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: Firefox 150 on Windows 11
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output of `docker compose logs --tail=100 app` or of the browser console, with personal names removed. It is formatted as code automatically.
+      render: text
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this bug has not been reported yet.
+          required: true
+        - label: I removed personal folder names, host names, IP addresses and passwords from this report.
+          required: true

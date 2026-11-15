@@ -160,4 +160,7 @@ def create_app(config: Settings | None = None) -> FastAPI:
 def app() -> FastAPI:
     """Uvicorn factory: `uvicorn --factory disksprawl.app:app`."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    # Every schedule change and capacity measurement would be logged otherwise.
+    for name in ("apscheduler", "alembic.runtime.plugins"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     return create_app()

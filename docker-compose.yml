@@ -1,0 +1,36 @@
+# DiskSprawl. Copy this file and .env.example (as .env) into a folder, mount the folders to
+# analyze below, then run `docker compose up -d`. See README.md and docs/deployment.md.
+name: disksprawl
+services:
+  app:
+    image: drdonoso/disksprawl:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      # Every interface by default, so other devices of your network can open it (APP_BIND_ADDRESS).
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-7780}:7780"
+    environment:
+      TZ: "${TZ:-Etc/UTC}"
+      AUTH_PASSWORD: "${AUTH_PASSWORD:-}"
+      AUTH_SECRET: "${AUTH_SECRET:-}"
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-false}"
+      SESSION_HOURS: "${SESSION_HOURS:-168}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
+      TRUSTED_PROXY_IPS: "${TRUSTED_PROXY_IPS:-127.0.0.1}"
+    volumes:
+      # The database, the scan history and the session key.
+      - data:/app/data
+      # The folders to analyze, read-only, below /data: one line per folder, then add each one in
+      # Settings → Directories (as /data/storage here). The container runs as user 1000, which must
+      # be able to list them: see docs/deployment.md#permissions.
+      - /mnt/storage:/data/storage:ro
+    # Hardening: the container writes only to /app/data and /tmp, cannot gain privileges and has no
+    # Linux capabilities. Scans only read.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  data:
