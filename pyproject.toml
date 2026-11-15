@@ -1,0 +1,62 @@
+[project]
+name = "disksprawl"
+version = "0.1.0"
+description = "Self-hosted disk usage analyzer: scheduled, gentle scans of your folders and network shares, with a treemap, history and what changed between scans."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "DrDonoso" }]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pydantic-settings>=2.4",
+    "apscheduler>=3.10,<4",
+    "ijson>=3.3",
+    "tzdata>=2025.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/DrDonoso/disksprawl"
+Repository = "https://github.com/DrDonoso/disksprawl"
+Issues = "https://github.com/DrDonoso/disksprawl/issues"
+Demo = "https://demo.disksprawl.drdonoso.com"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-timeout>=2.3",
+    "httpx2>=2",
+    "ruff>=0.15",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+disksprawl = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 120
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+python_version = "3.12"
+files = ["src/disksprawl"]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
