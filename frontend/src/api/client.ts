@@ -35,7 +35,7 @@ export function fieldMessage(code: string | undefined): string | undefined {
 }
 
 export async function api<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(new URL(`/api${path}`, window.location.origin), {
     method,
     credentials: 'same-origin',
     signal,

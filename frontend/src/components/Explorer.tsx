@@ -125,9 +125,10 @@ export function Explorer({ summary }: { summary: DirectorySummaryOut }) {
       ? <Notice>{t('treemap.missing')}</Notice>
       : current.error ? <Notice error>{errorMessage(current.error)}</Notice>
         : <Treemap items={items} label={t('treemap.label', { path: path || summary.directory.name })}
-          empty={current.isPending ? t('shell.loading') : t('treemap.empty')} />}
+          openHint={t('treemap.openHint')} empty={current.isPending ? t('shell.loading') : t('treemap.empty')} />}
     {!canCompare && <p className="muted small">{t('treemap.noComparison')}</p>}
-    {rows.length > 0 && <div className={styles.tableWrap}>
+    {rows.length > 0 && <div className={styles.tableWrap} role="region" tabIndex={0}
+      aria-label={t('treemap.tableCaption', { path: path || summary.directory.name })}>
       <table>
         <caption className="visually-hidden">{t('treemap.tableCaption', { path: path || summary.directory.name })}</caption>
         <thead><tr>

@@ -19,16 +19,29 @@ export function useTheme(): Theme {
   return useSyncExternalStore(subscribe, current, () => 'light')
 }
 
-/** The current time, refreshed every `interval` ms, for texts like "3 hours ago". */
-export function useNow(interval = 30_000): number {
-  return useSyncExternalStore(
-    listener => {
-      const timer = setInterval(listener, interval)
-      return () => clearInterval(timer)
-    },
-    () => Math.floor(Date.now() / interval) * interval,
-    () => 0,
-  )
+let tick = 0
+const tickers = new Set<() => void>()
+let timer: ReturnType<typeof setInterval> | undefined
+
+function subscribeTick(listener: () => void): () => void {
+  tickers.add(listener)
+  timer ??= setInterval(() => {
+    tick += 1
+    for (const ticker of tickers) ticker()
+  }, 15_000)
+  return () => {
+    tickers.delete(listener)
+    if (!tickers.size && timer !== undefined) {
+      clearInterval(timer)
+      timer = undefined
+    }
+  }
+}
+
+/** The current time, for texts like "3 hours ago": the component also re-renders every 15 s. */
+export function useNow(): number {
+  useSyncExternalStore(subscribeTick, () => tick, () => 0)
+  return Date.now()
 }
 
 /** The width and height of an element, followed with a ResizeObserver. */

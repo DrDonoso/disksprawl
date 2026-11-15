@@ -68,7 +68,8 @@ export function History({ directoryId, settings }: { directoryId: number; settin
       </figure>
     </div>
     {recent.length > 0 && <div className={styles.tableWrap}>
-      <h3>{t('history.recent')}</h3>
+      <h3 id="history-recent">{t('history.recent')}</h3>
+      <div className={styles.scroll} role="region" tabIndex={0} aria-labelledby="history-recent">
       <table>
         <thead><tr>
           <th scope="col">{t('history.columns.date')}</th>
@@ -89,6 +90,7 @@ export function History({ directoryId, settings }: { directoryId: number; settin
           </tr>)}
         </tbody>
       </table>
+      </div>
     </div>}
   </section>
 }

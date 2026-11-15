@@ -20,7 +20,7 @@ export interface TreemapItem {
 const MIN_INTERACTIVE = 6
 
 /** A squarified treemap of `items` (largest first), filling its container. */
-export function Treemap({ items, label, empty }: { items: TreemapItem[]; label: string; empty?: ReactNode }) {
+export function Treemap({ items, label, empty, openHint }: { items: TreemapItem[]; label: string; empty?: ReactNode; openHint: string }) {
   const [ref, size] = useElementSize<HTMLDivElement>()
   const theme = useTheme()
   const tiles = useMemo(
@@ -34,11 +34,14 @@ export function Treemap({ items, label, empty }: { items: TreemapItem[]; label: 
       const style = { left: tile.x, top: tile.y, width: tile.w, height: tile.h, background: item.color, color }
       const content = tile.w > 54 && tile.h > 30 ? <>
         <span className={styles.name}>{item.name}</span>
-        {tile.h > 50 && item.lines.map((line, index) => <span key={index} className={styles.line}>{line}</span>)}
+        {tile.h > 50 && item.lines.map((line, index) => <span key={index} className={styles.line}> {line}</span>)}
       </> : null
+      // A labelled tile is named by what it shows; a tile too small for a label, by its title.
       return item.onOpen && tile.w >= MIN_INTERACTIVE && tile.h >= MIN_INTERACTIVE
         ? <button key={item.key} type="button" className={`${styles.tile} ${styles.open}`} style={style}
-          title={item.title} aria-label={item.title} onClick={item.onOpen}>{content}</button>
+          title={item.title} aria-label={content ? undefined : item.title} onClick={item.onOpen}>
+          {content}{content && <span className="visually-hidden"> ({openHint})</span>}
+        </button>
         : <div key={item.key} className={styles.tile} style={style} title={item.title} aria-hidden="true">{content}</div>
     })}
     {tiles.length === 0 && size.width > 0 && <div className={styles.empty}>{empty}</div>}

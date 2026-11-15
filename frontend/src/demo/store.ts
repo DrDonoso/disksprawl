@@ -131,9 +131,8 @@ export class DemoStore {
     for (const { directory, model } of [media, photos, backups, documents]) {
       const runs = cronRuns(directory.cron ?? '0 3 * * *', 2000, year, this.timezone).filter(time => time < now)
       runs.forEach((time, index) => {
-        const started = time + r.between(4, 80) * 1000
-        const seconds = model.seconds * r.between(0.85, 1.2)
-        const finished = started + seconds * 1000
+        const started = Math.round(time + r.between(4, 80) * 1000)
+        const finished = Math.round(started + model.seconds * r.between(0.85, 1.2) * 1000)
         if (finished >= now) return
         // Media moved from the native engine to gdu five months ago.
         const engine: Engine = directory.id === media.directory.id && time < now - 150 * DAY ? 'native' : directory.engine

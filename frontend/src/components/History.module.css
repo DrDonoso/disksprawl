@@ -78,9 +78,13 @@
 }
 
 .tableWrap {
-  overflow-x: auto;
   display: grid;
   gap: 6px;
+  min-width: 0;
+}
+
+.scroll {
+  overflow-x: auto;
 }
 
 .warn {

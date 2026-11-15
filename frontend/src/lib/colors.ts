@@ -4,7 +4,7 @@ export type Theme = 'light' | 'dark'
 /** "Size" view: a distinct hue per position, light tiles with dark text or dark tiles with light text. */
 export function sizeColor(index: number, theme: Theme): string {
   const hue = (index * 47) % 360
-  return theme === 'dark' ? `hsl(${hue}, 45%, 32%)` : `hsl(${hue}, 55%, 82%)`
+  return theme === 'dark' ? `hsl(${hue}, 45%, 27%)` : `hsl(${hue}, 55%, 82%)`
 }
 
 /** Bytes a change needs for full intensity: a quarter of the folder, and at least 2 GB. */
