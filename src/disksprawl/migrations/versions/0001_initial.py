@@ -127,7 +127,7 @@ def upgrade() -> None:
     op.create_table(
         "settings",
         sa.Column("key", sa.String(60), primary_key=True),
-        sa.Column("value", sa.JSON(), nullable=True),
+        sa.Column("value", sa.JSON(), nullable=False),
     )
     op.create_table(
         "auth_sessions",
