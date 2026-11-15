@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from .common import ENGINES
 
 MAX_THREADS = {"native": 16, "du": 1, "ncdu": 16, "gdu": 8}
-# How a running scan reports progress: live counters, finished folders (du), live only with one
-# thread (ncdu), or nothing until the end (gdu).
-PROGRESS = {"native": "live", "du": "folders", "ncdu": "single_thread", "gdu": "none"}
+# How a running scan reports progress: live counters (ncdu's are approximate with several threads),
+# finished folders (du), or nothing until the end (gdu).
+PROGRESS = {"native": "live", "du": "folders", "ncdu": "live", "gdu": "none"}
 # GNU du first; `gnudu` is GNU du on systems whose `du` is another implementation.
 DU_CANDIDATES = ("du", "gnudu")
 

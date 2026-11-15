@@ -1,4 +1,9 @@
-"""Schedules in cron format (5 fields), evaluated in the server's time zone (TZ)."""
+"""Schedules in cron format (5 fields), evaluated in the server's time zone (TZ).
+
+Day-of-week numbers follow standard cron (0 and 7 are Sunday, 1 is Monday). APScheduler counts from
+Monday instead, so the field is translated to day names before it reaches APScheduler. When both
+the day of the month and the day of the week are restricted, both must match.
+"""
 
 from datetime import datetime, timedelta, tzinfo
 
@@ -8,14 +13,56 @@ from .db import utcnow
 from .errors import AppError
 
 MAX_LENGTH = 120
+DAY_NAMES = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+
+
+def _weekday(text: str) -> int:
+    if text in DAY_NAMES:
+        return DAY_NAMES.index(text)
+    if text.isdigit() and int(text) <= 7:
+        return int(text)
+    raise ValueError(f"Invalid day of week {text!r}")
+
+
+def weekdays(field: str) -> str:
+    """A standard cron day-of-week field as APScheduler day names (`1-5` → `mon,…,fri`)."""
+    if field == "*":
+        return field
+    days: set[int] = set()
+    for item in field.lower().split(","):
+        base, slash, step_text = item.partition("/")
+        if slash and not (step_text.isdigit() and 1 <= int(step_text) <= 7):
+            raise ValueError(f"Invalid step {step_text!r}")
+        step = int(step_text) if slash else 1
+        if base == "*":
+            start, end = 0, 6
+        elif "-" in base:
+            first, last = base.split("-", 1)
+            start, end = _weekday(first), _weekday(last)
+        else:
+            start = _weekday(base)
+            end = 6 if slash else start
+        if start > end:
+            raise ValueError(f"Invalid range {base!r}")
+        days.update(day % 7 for day in range(start, end + 1, step))
+    return ",".join(DAY_NAMES[day] for day in sorted(days))
 
 
 def trigger(expression: str, zone: tzinfo) -> CronTrigger:
     text = " ".join(expression.split())
-    if not text or len(text) > MAX_LENGTH or len(text.split(" ")) != 5:
+    fields = text.split(" ")
+    if not text or len(text) > MAX_LENGTH or len(fields) != 5:
         raise AppError("invalid_cron", fields={"cron": "invalid_cron"})
+    minute, hour, day, month, day_of_week = fields
     try:
-        return CronTrigger.from_crontab(text, timezone=zone)
+        return CronTrigger(
+            minute=minute,
+            hour=hour,
+            day=day,
+            month=month,
+            day_of_week=weekdays(day_of_week),
+            timezone=zone,
+        )
     except (ValueError, KeyError):
         raise AppError("invalid_cron", fields={"cron": "invalid_cron"}) from None
 

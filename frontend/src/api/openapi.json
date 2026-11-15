@@ -697,7 +697,6 @@
             "enum": [
               "live",
               "folders",
-              "single_thread",
               "none"
             ],
             "title": "Progress",

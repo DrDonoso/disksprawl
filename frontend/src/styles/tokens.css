@@ -1,0 +1,68 @@
+/* Design tokens. Light by default, dark when the system asks for it: there is no theme switch. */
+:root {
+  color-scheme: light dark;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef0f3;
+  --border: #dde1e6;
+  --text: #14171c;
+  --text-muted: #5b6370;
+  --primary: #2457c5;
+  --primary-hover: #1c469f;
+  --primary-contrast: #ffffff;
+  --focus: #2457c5;
+  --ok: #1f7a3a;
+  --warn: #8a5a00;
+  --danger: #b42318;
+  --ok-fill: #2f9e52;
+  --warn-fill: #e6a700;
+  --danger-fill: #d6402f;
+  --track: #e3e6ea;
+  --notice-bg: #fff8e6;
+  --notice-border: #f0d48a;
+  --error-bg: #fdecea;
+  --error-border: #f5b5ad;
+  --chart-line: #2457c5;
+  --chart-area: rgba(36, 87, 197, 0.12);
+  --chart-volume: #8a5a00;
+  --shadow: 0 1px 2px rgba(20, 23, 28, 0.06), 0 2px 8px rgba(20, 23, 28, 0.06);
+
+  --radius: 8px;
+  --radius-small: 5px;
+  --topbar-height: 52px;
+  --sidebar-width: 280px;
+  --gap: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --surface: #1c2027;
+    --surface-2: #252a33;
+    --border: #333a45;
+    --text: #e8eaee;
+    --text-muted: #a4acb9;
+    --primary: #7aa2ff;
+    --primary-hover: #9ab8ff;
+    --primary-contrast: #0c1530;
+    --focus: #9ab8ff;
+    --ok: #6fd18f;
+    --warn: #f0c050;
+    --danger: #ff8a7d;
+    --ok-fill: #3fae63;
+    --warn-fill: #e0a91f;
+    --danger-fill: #e2574a;
+    --track: #2d333d;
+    --notice-bg: #2c2615;
+    --notice-border: #5c4a1a;
+    --error-bg: #3a1d1b;
+    --error-border: #6e2f2a;
+    --chart-line: #7aa2ff;
+    --chart-area: rgba(122, 162, 255, 0.16);
+    --chart-volume: #f0c050;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}

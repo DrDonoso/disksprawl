@@ -1,0 +1,15 @@
+.welcome {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  max-width: 640px;
+  margin: 6vh auto 0;
+  padding: 28px;
+}
+
+.steps {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+}

@@ -11,7 +11,7 @@ Measure = Literal["apparent", "disk"]
 ScanStatus = Literal["queued", "running", "completed", "failed", "cancelled", "interrupted"]
 Trigger = Literal["scheduled", "manual"]
 Phase = Literal["queued", "scanning", "finishing", "saving"]
-ProgressKind = Literal["live", "folders", "single_thread", "none"]
+ProgressKind = Literal["live", "folders", "none"]
 
 DEFAULT_EXCLUDES = ("#snapshot", ".snapshot", ".zfs")
 MAX_EXCLUDES = 50

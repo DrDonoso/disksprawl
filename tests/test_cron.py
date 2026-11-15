@@ -27,6 +27,23 @@ def test_next_runs_follow_the_time_zone_across_daylight_saving() -> None:
     assert all(run.astimezone(MADRID).hour == 3 for run in runs)
 
 
+def test_days_of_week_follow_standard_cron() -> None:
+    sunday = datetime(2026, 11, 15, 12, tzinfo=UTC)  # a Sunday
+    zone = ZoneInfo("Etc/UTC")
+
+    def days(expression: str) -> list[str]:
+        return [run.strftime("%a") for run in next_runs(expression, zone, count=5, after=sunday)]
+
+    assert days("0 3 * * 1") == days("0 3 * * mon") == ["Mon"] * 5
+    assert days("0 3 * * 0")[0] == days("0 3 * * 7")[0] == days("0 3 * * sun")[0] == "Sun"
+    assert days("0 3 * * 1-5") == ["Mon", "Tue", "Wed", "Thu", "Fri"]
+    assert days("0 3 * * 6,0") == ["Sat", "Sun", "Sat", "Sun", "Sat"]
+    assert days("0 3 * * */2") == ["Tue", "Thu", "Sat", "Sun", "Tue"]
+    for invalid in ("0 3 * * 8", "0 3 * * 5-1", "0 3 * * x", "0 3 * * 1/0"):
+        with pytest.raises(AppError):
+            normalize(invalid, zone)
+
+
 def test_missed_run() -> None:
     now = datetime(2026, 11, 15, 3, 30, tzinfo=UTC)
     zone = ZoneInfo("Etc/UTC")

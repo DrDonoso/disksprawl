@@ -1,0 +1,51 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, calc(50% - 8px)), 1fr));
+  gap: var(--gap);
+}
+
+.card {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 14px 16px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+
+.detail {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    gap: 10px;
+  }
+
+  .card {
+    padding: 10px 12px;
+  }
+
+  .value {
+    font-size: 1.15rem;
+  }
+
+  .detail {
+    font-size: 0.84rem;
+  }
+}
