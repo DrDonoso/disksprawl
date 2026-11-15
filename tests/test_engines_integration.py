@@ -109,7 +109,8 @@ def test_names_that_are_not_utf8(client: TestClient, scan_root: Path) -> None:
         progress = client.get("/api/queue").json()
         assert progress == {"items": []}
     finally:
-        os.chmod(locked, 0o755)
+        # Owner-only again, so the temporary folder can be removed.
+        os.chmod(locked, 0o700)
 
 
 def test_browse_leaves_out_names_that_are_not_utf8(client: TestClient, scan_root: Path) -> None:
