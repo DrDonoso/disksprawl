@@ -21,8 +21,9 @@ LOGIN_FAILURES_PER_CLIENT = 5
 LOGIN_FAILURES_TOTAL = 50
 
 
-def digest(value: str) -> str:
-    return hashlib.sha256(value.encode()).hexdigest()
+def token_digest(token: str) -> str:
+    """How a session token is stored: a random 256-bit token needs no slow hash, unlike a password."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 class LoginLimiter:
@@ -70,14 +71,15 @@ class Auth:
         self.hours = config.session_hours
         self.secure = config.auth_cookie_secure
         self.key = config.signing_key() if self.enabled else b""
-        self._password = digest(config.auth_password.get_secret_value())
+        self._password = config.auth_password.get_secret_value().encode()
         self.limiter = LoginLimiter()
 
     def _signature(self, token: str, expires: int) -> str:
         return hmac.new(self.key, f"{token}.{expires}".encode(), hashlib.sha256).hexdigest()
 
     def password_matches(self, password: str) -> bool:
-        return hmac.compare_digest(digest(password), self._password)
+        # Constant time for the contents; only a difference in length can show.
+        return bool(self._password) and hmac.compare_digest(password.encode(), self._password)
 
     def create(self) -> tuple[str, datetime]:
         """A new session: (cookie value, expiry)."""
@@ -85,7 +87,7 @@ class Auth:
         expires_at = utcnow() + timedelta(hours=self.hours)
         expires = int(expires_at.timestamp())
         with transaction(self.sessions) as db:
-            db.add(AuthSession(token_hash=digest(token), expires_at=expires_at))
+            db.add(AuthSession(token_hash=token_digest(token), expires_at=expires_at))
         return f"{token}.{expires}.{self._signature(token, expires)}", expires_at
 
     def _token(self, cookie: str | None) -> str | None:
@@ -108,7 +110,7 @@ class Auth:
         if token is None:
             return False
         with self.sessions() as db:
-            session = db.get(AuthSession, digest(token))
+            session = db.get(AuthSession, token_digest(token))
             return session is not None and session.expires_at > utcnow()
 
     def revoke(self, cookie: str | None) -> None:
@@ -116,7 +118,7 @@ class Auth:
         if token is None:
             return
         with transaction(self.sessions) as db:
-            session = db.get(AuthSession, digest(token))
+            session = db.get(AuthSession, token_digest(token))
             if session is not None:
                 db.delete(session)
 

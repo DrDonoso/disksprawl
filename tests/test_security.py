@@ -40,6 +40,8 @@ def test_with_a_password_a_session_is_required(protected: TestClient) -> None:
     assert protected.get("/health").status_code == 200
     assert protected.get("/api/version").status_code == 200
     assert login(protected, "wrong password!") == 401
+    assert login(protected, PASSWORD[:-1]) == 401
+    assert login(protected, PASSWORD + "x") == 401
     assert login(protected) == 204
     cookie = protected.cookies.get(COOKIE)
     assert cookie
