@@ -13,11 +13,19 @@ from disksprawl.app import create_app
 from disksprawl.config import Settings
 from disksprawl.db import Scan, transaction, utcnow
 from disksprawl.scanning import import_entries
+from disksprawl.scheduler import Scheduler
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).parent / "fixtures"
 WRITE = {"Origin": "http://testserver", "X-DiskSprawl-Request": "1"}
 sys.path.insert(0, str(ROOT / "scripts"))
+
+
+@pytest.fixture(autouse=True)
+def paused_schedules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No schedule fires on its own during a test: a directory scanned daily at 03:00 would get an
+    extra scan in any test that runs at that moment. Tests call the scheduler's methods instead."""
+    monkeypatch.setattr(Scheduler, "paused", True)
 
 
 def write_tree(root: Path, spec: dict[str, object]) -> None:
@@ -43,6 +51,8 @@ def settings(tmp_path: Path, scan_root: Path) -> Settings:
         data_dir=tmp_path / "state",
         scan_root=scan_root,
         frontend_dir=tmp_path / "dist",
+        # The server's time zone, whatever TZ says on the machine running the tests.
+        tz="Etc/UTC",
         _env_file=None,  # type: ignore[call-arg]
     )
 

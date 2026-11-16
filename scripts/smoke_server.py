@@ -3,7 +3,8 @@
     python scripts/smoke_server.py --port 7889
 
 It serves the built frontend (frontend/dist) on 127.0.0.1 only, with the sample tree from
-make_sample_tree.py as the scan root, recreated at every start in a temporary folder. Never deploy it.
+make_sample_tree.py as the scan root, recreated at every start in a temporary folder. Schedules never
+fire on their own, so the tests do not depend on the time of day they run at. Never deploy it.
 """
 
 import argparse
@@ -22,6 +23,7 @@ import make_sample_tree  # noqa: E402
 
 from disksprawl.app import create_app  # noqa: E402
 from disksprawl.config import Settings  # noqa: E402
+from disksprawl.scheduler import Scheduler  # noqa: E402
 
 
 def main() -> None:
@@ -45,6 +47,7 @@ def main() -> None:
         _env_file=None,  # type: ignore[call-arg]
     )
     logging.basicConfig(level=logging.WARNING)
+    Scheduler.paused = True
     print(f"Sample tree: {scan_root / 'storage'}", flush=True)
     uvicorn.run(create_app(settings), host="127.0.0.1", port=args.port, log_level="warning")
 

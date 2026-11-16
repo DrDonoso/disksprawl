@@ -53,11 +53,13 @@ test "$(docker compose exec -T app id -u)" = 1000
 if docker compose exec -T app touch /data/sample/written 2>/dev/null; then echo 'The sample tree is writable' >&2; exit 1; fi
 if docker compose exec -T app touch /app/written 2>/dev/null; then echo 'The image is writable' >&2; exit 1; fi
 
-# Scans directory $1 (at $2) with engine $3 and measure $4, and prints the finished scan.
+# Scans directory $1 (at $2) with engine $3 and measure $4, and prints the finished scan. The
+# directories have no schedule: a scheduled scan (daily at 03:00 by default) could otherwise join
+# in when the test runs at that time.
 scan_with() {
     local body scan state
     body=$(jq -nc --arg path "$2" --arg engine "$3" --arg measure "$4" \
-        '{name: "Smoke", path: $path, engine: $engine, measure: $measure, pace: "max",
+        '{name: "Smoke", path: $path, cron: null, engine: $engine, measure: $measure, pace: "max",
           threads: (if $engine == "du" then 1 else 4 end)}')
     send -X PUT --data "$body" "$base/api/directories/$1" >/dev/null
     scan=$(send -X POST "$base/api/directories/$1/scan" | jq -r .scan_id)
@@ -69,7 +71,7 @@ scan_with() {
     curl -fsS "$base/api/scans/$scan"
 }
 
-directory=$(send -X POST --data '{"name":"Sample","path":"/data/sample","pace":"max"}' "$base/api/directories" | jq -r .directory.id)
+directory=$(send -X POST --data '{"name":"Sample","path":"/data/sample","cron":null,"pace":"max"}' "$base/api/directories" | jq -r .directory.id)
 for measure in apparent disk; do
     results=()
     for engine in native du ncdu gdu; do
@@ -87,7 +89,7 @@ curl -fsS "$base/api/directories/$directory/tree" | jq -e '.size > 0 and (.child
 
 # Names that are not UTF-8 show `\xNN` escapes (gdu writes U+FFFD itself); the unreadable folder is
 # reported, and every scan completes.
-latin_directory=$(send -X POST --data '{"name":"Latin-1","path":"/data/latin1","pace":"max"}' "$base/api/directories" | jq -r .directory.id)
+latin_directory=$(send -X POST --data '{"name":"Latin-1","path":"/data/latin1","cron":null,"pace":"max"}' "$base/api/directories" | jq -r .directory.id)
 for engine in native du ncdu gdu; do
     result=$(scan_with "$latin_directory" /data/latin1 "$engine" apparent)
     echo "latin1 $engine: $(jq -c '{status, total_bytes, error_count, error_sample}' <<<"$result")"

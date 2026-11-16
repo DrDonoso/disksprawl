@@ -57,6 +57,17 @@ def test_a_directory_is_never_queued_twice(client: TestClient, scan_root: Path, 
     assert len(client.get(f"/api/directories/{directory}/scans").json()["items"]) == 1
 
 
+def test_schedules_never_fire_during_tests(client: TestClient, scan_root: Path) -> None:
+    """The tests' scheduler is paused (conftest.py): a schedule that came due in the middle of a
+    test, at 03:00 for example, would add a scan to it. Next runs are still reported."""
+    directory = add_directory(client, scan_root, cron="* * * * *")
+    jobs = client.app.state.scheduler.scheduler  # type: ignore[attr-defined]
+    jobs.modify_job(f"scan-{directory}", next_run_time=utcnow())
+    time.sleep(0.5)
+    assert client.get(f"/api/directories/{directory}/scans").json()["items"] == []
+    assert client.get(f"/api/directories/{directory}/overview").json()["next_run"] is not None
+
+
 def test_running_scans_report_live_progress(client: TestClient, scan_root: Path, tmp_path: Path):
     use_worker(client, fake_worker(tmp_path, seconds=1.5))
     directory = add_directory(client, scan_root)
