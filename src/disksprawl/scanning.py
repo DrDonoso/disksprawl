@@ -2,7 +2,8 @@
 
 Scans wait in the database (`queued`), so they survive a restart; a scan that was running when the
 app stopped becomes `interrupted`. While a scan runs, its live counters stay in memory and the API
-reads them, with an estimate based on the previous completed scan of the same directory.
+reads them, with an estimate from the folders and files of the previous completed scan of the same
+directory.
 """
 
 import json
@@ -44,6 +45,8 @@ STORE_ATTEMPTS = 4
 RETRY_SECONDS = 1.0
 # Longest wait between two attempts to record how a scan ended.
 MAX_RETRY_SECONDS = 60.0
+# For estimates: listing a folder costs about as much time as reading the details of ten files.
+FOLDER_COST = 10
 
 
 def options_of(directory: Directory) -> dict[str, Any]:
@@ -62,10 +65,9 @@ def options_of(directory: Directory) -> dict[str, Any]:
 class Previous:
     """The last completed scan of the directory, the reference for estimates."""
 
-    total_bytes: int | None
     dir_count: int | None
+    file_count: int | None
     duration: float | None
-    measure: str
 
 
 @dataclass
@@ -77,7 +79,10 @@ class Live:
     started: float = field(default_factory=time.monotonic)
     phase: str = "scanning"
     counters: bool = True
-    dirs: int = 0
+    # Folders and files read so far, the scanned folder included. Files are None when they are not
+    # counted (du); folders are None when they are counted with the files (ncdu with several
+    # threads draws a single counter).
+    dirs: int | None = 0
     files: int | None = None
     done_bytes: int = 0
     current: str | None = None
@@ -86,24 +91,40 @@ class Live:
     cancel: bool = False
 
     def estimate(self, elapsed: float) -> tuple[float | None, float | None]:
-        """(share done, seconds left), both approximate; None when they cannot be estimated."""
+        """(share done, seconds left), both approximate; None when they cannot be estimated.
+
+        The share compares the work done so far with the previous scan's: its files plus
+        FOLDER_COST times its folders. Never the bytes: a scan reads each entry's details, which
+        takes as long for a large video as for a small text file, so a scan that meets its largest
+        files first reads most of the bytes long before it ends. Folders weigh more than files
+        because each one is listed, with several requests over a network share, but they are
+        counted only once their listing ends: weighing them by their number, rather than giving
+        them a fixed half of the estimate, keeps a folder of many files and no subfolders from
+        stalling at 50 %. The seconds left follow the pace of this scan so far.
+        """
         previous = self.previous
         if not self.counters or previous is None or self.phase != "scanning":
             return None, None
-        ratio = None
-        # du reports finished folders only: its bytes lag behind, its folder count does not.
-        if (
-            self.engine != "du"
-            and previous.total_bytes
-            and previous.measure == self.measure
-            and self.done_bytes > 0
-        ):
-            ratio = self.done_bytes / previous.total_bytes
-        elif self.dirs and previous.dir_count:
-            ratio = self.dirs / previous.dir_count
-        if ratio is None:
+        dir_count, file_count = previous.dir_count, previous.file_count
+        if dir_count is None:
             return None, None
-        ratio = min(max(ratio, 0.0), 0.99)
+        # dir_count leaves out the scanned folder itself, which the counters include.
+        folders = dir_count + 1
+        if self.dirs is None:
+            # One counter of files and folders together: compared with both.
+            if self.files is None or file_count is None:
+                return None, None
+            done, total = self.files, file_count + folders
+        elif self.files is None or file_count is None:
+            # du counts no files, neither while it scans nor as the previous scan: folders only.
+            done, total = self.dirs, folders
+        else:
+            done = self.files + FOLDER_COST * self.dirs
+            total = file_count + FOLDER_COST * folders
+        # Nothing counted yet: nothing to estimate from.
+        if not done:
+            return None, None
+        ratio = min(done / total, 0.99)
         remaining = elapsed * (1 - ratio) / ratio if ratio >= 0.01 and elapsed >= 2 else None
         return ratio, remaining
 
@@ -363,12 +384,7 @@ class Scanner:
                 .order_by(Scan.finished_at.desc(), Scan.id.desc())
             ).first()
             previous = (
-                Previous(
-                    reference.total_bytes,
-                    reference.dir_count,
-                    reference.duration_seconds,
-                    str(reference.options.get("measure", "apparent")),
-                )
+                Previous(reference.dir_count, reference.file_count, reference.duration_seconds)
                 if reference is not None
                 else None
             )
@@ -468,7 +484,8 @@ class Scanner:
             if kind == "progress":
                 live.phase = str(message.get("phase", "scanning"))
                 live.counters = bool(message.get("live", True))
-                live.dirs = int(message.get("dirs") or 0)
+                dirs = message.get("dirs", 0)
+                live.dirs = int(dirs) if dirs is not None else None
                 files = message.get("files")
                 live.files = int(files) if files is not None else None
                 live.done_bytes = int(message.get("bytes") or 0)

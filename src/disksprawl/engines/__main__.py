@@ -139,6 +139,8 @@ def run(job: Job) -> tuple[Tree, ErrorLog, Progress]:
     if job.engine == "ncdu":
         threaded = job.threads > 1
         progress = Progress()
+        # With several threads its terminal UI counts files and folders together.
+        progress.dirs_in_files = threaded
         tree = Tree()
         progress.start()
         terminal = TerminalProgress(job.root, progress)
@@ -152,9 +154,11 @@ def run(job: Job) -> tuple[Tree, ErrorLog, Progress]:
             terminal=threaded,
         )
         if threaded:
+            progress.phase = "finishing"
             progress.dirs = export_progress.dirs
             progress.files = export_progress.files
             progress.bytes = export_progress.bytes
+            progress.dirs_in_files = False
         return tree, errors, progress
     if job.engine == "gdu":
         progress = Progress(live=False)

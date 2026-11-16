@@ -145,7 +145,8 @@ class ProgressOut(Contract):
     files: int | None
     bytes: int
     current: str | None
-    # Estimated share done (0–0.99) and seconds left, from the previous completed scan.
+    # Estimated share done (0–0.99), from the folders and files read compared with the previous
+    # completed scan, and the seconds left at the pace so far.
     percent: float | None
     remaining_seconds: float | None
     previous_duration_seconds: float | None

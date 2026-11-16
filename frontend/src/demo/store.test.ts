@@ -92,6 +92,21 @@ describe('simulated scans', () => {
     expect(demo.cancel(queued.scan_id).status).toBe('cancelled')
     expect(() => demo.cancel(queued.scan_id)).toThrow(DemoError)
   })
+
+  test('estimate from the folders and files of the previous scan, whatever the measure', () => {
+    const { demo, advance } = store()
+    // Photos measured the apparent size so far; its next scan measures the space on disk.
+    const { id, position: _position, created_at: _created, updated_at: _updated, ...photos } = demo.get(2).directory
+    demo.update(id, { ...photos, measure: 'disk' })
+    // Photos counts folders and files (native), Documents only folders (du). A simulated scan reads
+    // them evenly for 85 % of its 7 seconds.
+    for (const directory of [2, 4]) {
+      demo.enqueue(directory)
+      advance(3000)
+      expect(demo.summary(directory).progress?.percent).toBeCloseTo(3000 / 5950, 1)
+      advance(5000)
+    }
+  })
 })
 
 describe('validation like the backend', () => {

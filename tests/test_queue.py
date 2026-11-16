@@ -1,9 +1,11 @@
 """The scan queue: one scan at a time, no duplicates, cancellation, failures and restarts."""
 
+import json
 import sys
 import time
 from pathlib import Path
 
+import pytest
 from conftest import OPTIONS, WRITE, add_directory, fake_worker, scan, wait_idle
 from fastapi.testclient import TestClient
 
@@ -177,26 +179,130 @@ def test_scans_running_at_shutdown_become_interrupted(settings: Settings, scan_r
         assert overview["last_attempt"]["status"] == "interrupted"
 
 
-def test_estimates_compare_with_the_previous_scan() -> None:
-    live = Live(1, 1, "native", "apparent", previous=None)
-    live.done_bytes, live.dirs = 500, 10
-    assert live.estimate(10) == (None, None)
-    live.previous = Previous(total_bytes=1000, dir_count=40, duration=100, measure="apparent")
-    ratio, remaining = live.estimate(10)
-    assert ratio == 0.5 and remaining == 10
-    # Growth since the previous scan never shows 100 % before the end.
-    live.done_bytes = 5000
-    assert live.estimate(10)[0] == 0.99
-    # du counts finished folders: its bytes lag behind.
-    du = Live(1, 1, "du", "apparent", previous=live.previous)
-    du.done_bytes, du.dirs = 100, 30
-    assert du.estimate(30)[0] == 0.75
-    # Another measure: bytes are not comparable, folders are.
-    disk = Live(1, 1, "native", "disk", previous=live.previous)
-    disk.done_bytes, disk.dirs = 900, 4
-    assert disk.estimate(30)[0] == 0.1
+def test_estimates_compare_folders_and_files_with_the_previous_scan() -> None:
+    # The work of the previous scan: 90,000 files and 1,000 folders (the scanned one included),
+    # each folder weighing as much as 10 files: 100,000.
+    previous = Previous(dir_count=999, file_count=90_000, duration=3600)
+    live = Live(1, 1, "native", "apparent", previous=None, dirs=400, files=31_000)
+    live.done_bytes = 9 * 10**11
+    assert live.estimate(700) == (None, None)
+    live.previous = previous
+    # 31,000 files and 400 folders: 35,000 of 100,000. The bytes play no part.
+    ratio, remaining = live.estimate(700)
+    assert ratio == pytest.approx(0.35) and remaining == pytest.approx(1300)
+    # Nor does the measure.
+    disk = Live(1, 1, "native", "disk", previous=previous, dirs=400, files=31_000)
+    assert disk.estimate(700)[0] == pytest.approx(0.35)
+    # du counts finished folders and no files, and a du scan as the reference has no files.
+    du = Live(1, 1, "du", "apparent", previous=previous, dirs=250)
+    assert du.estimate(30)[0] == pytest.approx(0.25)
+    after_du = Live(1, 1, "native", "apparent", previous=Previous(999, None, 60), dirs=250,
+                    files=90_000)
+    assert after_du.estimate(30)[0] == pytest.approx(0.25)
+    # ncdu with several threads has one counter of files and folders together.
+    threaded = Live(1, 1, "ncdu", "apparent", previous=previous, dirs=None, files=45_500)
+    assert threaded.estimate(30)[0] == pytest.approx(0.5)
+    # Growth since the previous scan: 99 % is the most shown.
+    grown = Live(1, 1, "native", "apparent", previous=previous, dirs=500, files=150_000)
+    assert grown.estimate(30)[0] == 0.99
+    # Nothing counted yet: no estimate; no time left before 1 % done and 2 seconds.
+    assert Live(1, 1, "native", "apparent", previous=previous, files=0).estimate(30) == (None, None)
+    assert Live(1, 1, "native", "apparent", previous=previous, dirs=5, files=500).estimate(30)[1] is None
+    assert live.estimate(1.5)[1] is None
     # gdu reports nothing until the end; neither does a scan that is saving its results.
-    gdu = Live(1, 1, "gdu", "apparent", previous=live.previous, counters=False)
+    gdu = Live(1, 1, "gdu", "apparent", previous=previous, counters=False)
     assert gdu.estimate(30) == (None, None)
     live.phase = "saving"
     assert live.estimate(30) == (None, None)
+
+
+@pytest.mark.parametrize("folder_cost", [0, 5, 10, 30])
+def test_estimates_follow_the_work_when_large_files_come_first(folder_cost: int) -> None:
+    """A generic tree read with its largest files first: 100 folders of one 40 GB video each, then
+    900 folders of 100 photos of 4 MB. Reading a file's details takes as long whatever its size,
+    and listing a folder as long as `folder_cost` files: from nothing to what a network share
+    usually costs. After the videos 92 % of the bytes are read, but at most 3 % of the time has
+    passed: the estimate stays within 2 points of the share of time spent."""
+    folders = [(1, 40 * 10**9)] * 100 + [(100, 4 * 10**6)] * 900
+    file_count = sum(files for files, _ in folders)
+    total_time = folder_cost * (len(folders) + 1) + file_count
+    live = Live(1, 1, "native", "apparent", previous=Previous(len(folders), file_count, None))
+    # The scanned folder first, then its subfolders.
+    dirs, read, spent = 1, 0, folder_cost
+    for files, size in folders[:-1]:
+        dirs, read, spent = dirs + 1, read + files, spent + folder_cost + files
+        live.dirs, live.files, live.done_bytes = dirs, read, live.done_bytes + files * size
+        ratio, remaining = live.estimate(spent)
+        assert ratio == pytest.approx(spent / total_time, abs=0.02), (dirs, read)
+        if 0.25 * total_time <= spent <= 0.9 * total_time:
+            # The time left, from the pace so far, is within a tenth of the real one.
+            assert remaining == pytest.approx(total_time - spent, rel=0.1), (dirs, read)
+
+
+@pytest.mark.parametrize("tree", [[200_000], [0, 50_000, 50_000, 50_000]])
+def test_estimates_of_folders_with_many_files(tree: list[int]) -> None:
+    """A folder is counted once its listing ends, so a scan of few folders holding many files spends
+    nearly all its time in folders not counted yet: the estimate follows the files there, instead
+    of stalling at 50 % (one folder) or lagging behind (three under the scanned one). `tree` lists
+    the folders in the order the native engine reads them, with their files; listing one takes as
+    long as reading ten files."""
+    file_count = sum(tree)
+    total_time = 10 * len(tree) + file_count
+    live = Live(1, 1, "native", "apparent", previous=Previous(len(tree) - 1, file_count, None))
+    dirs = read = spent = 0
+    for files in tree:
+        for tenth in range(1, 11):
+            # The folder is listed, then its files are read a tenth at a time.
+            live.dirs, live.files = dirs, read + files * tenth // 10
+            ratio, _ = live.estimate(spent + 10 + files * tenth // 10)
+            if ratio is not None:
+                share = (spent + 10 + files * tenth // 10) / total_time
+                assert ratio == pytest.approx(min(share, 0.99), abs=0.01), (dirs, live.files)
+        dirs, read, spent = dirs + 1, read + files, spent + 10 + files
+
+
+def test_the_estimate_through_the_api(client: TestClient, scan_root: Path, tmp_path: Path):
+    """The previous scan's folders and files are the reference: not its bytes, which a worker that
+    met the largest files first has nearly all read."""
+    control = tmp_path / "control"
+    control.mkdir()
+    script = tmp_path / "worker.py"
+    script.write_text(f"""
+import json, pathlib, sys, time
+job = json.load(open(sys.argv[1]))
+control = pathlib.Path({str(control)!r})
+plan = control / "progress.json"
+while plan.exists() and not (control / "release").exists():
+    print(json.dumps({{"type": "progress", "phase": "scanning", "live": True, "current": "x",
+                      **json.loads(plan.read_text())}}), flush=True)
+    time.sleep(0.05)
+with open(job["result_path"], "w") as handle:
+    handle.write(json.dumps([0, -1, "", 10**12, 3000, 99]) + "\\n")
+print(json.dumps({{"type": "done", "total_bytes": 10**12, "file_count": 3000, "dir_count": 99,
+                  "entries": 1, "error_count": 0, "error_sample": []}}), flush=True)
+""")
+    use_worker(client, [sys.executable, str(script)])
+    directory = add_directory(client, scan_root)
+    # The reference: 3,000 files, 100 folders with the scanned one, and 1 TB.
+    assert scan(client, directory)["status"] == "completed"
+
+    def progress_with(counters: dict[str, int | None]) -> dict[str, object]:
+        (control / "progress.json").write_text(json.dumps(counters))
+        (control / "release").unlink(missing_ok=True)
+        client.post(f"/api/directories/{directory}/scan", headers=WRITE)
+
+        def overview() -> dict[str, object]:
+            return client.get(f"/api/directories/{directory}/overview").json()["progress"] or {}
+
+        wait_for(lambda: overview().get("percent") is not None)
+        progress = overview()
+        (control / "release").touch()
+        wait_idle(client)
+        return progress
+
+    # 95 % of the bytes, but 1,000 files and 40 folders (as much as 400 files): 1,400 of 4,000.
+    progress = progress_with({"dirs": 40, "files": 1000, "bytes": 95 * 10**10})
+    assert progress["percent"] == 0.35
+    # ncdu with several threads: one counter of files and folders, and no folder count.
+    progress = progress_with({"dirs": None, "files": 1550, "bytes": 10**11})
+    assert progress["percent"] == 0.5 and progress["dirs"] == 0
