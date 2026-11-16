@@ -34,6 +34,10 @@ def scan_job_id(directory_id: int) -> str:
 
 
 class Scheduler:
+    # Tests and the browser tests' server start it paused: next runs are still computed, but no
+    # schedule fires in the middle of a test because of the time of day it runs at.
+    paused = False
+
     def __init__(self, sessions: sessionmaker[Session], config: Settings, scanner: Scanner):
         self.sessions = sessions
         self.config = config
@@ -49,7 +53,7 @@ class Scheduler:
         self._stopping = threading.Event()
 
     def start(self) -> None:
-        self.scheduler.start()
+        self.scheduler.start(paused=self.paused)
         with self.sessions() as db:
             directories = db.scalars(select(Directory)).all()
             for directory in directories:

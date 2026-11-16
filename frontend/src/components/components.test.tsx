@@ -7,8 +7,8 @@ import { Freshness } from './DirectoryPage'
 import { InfoTip } from './InfoTip'
 import { ScanProgress } from './ScanProgress'
 import { renderWithProviders } from '../test/render'
+import { NOW } from '../test/clock'
 
-const NOW = Date.UTC(2026, 10, 15, 12)
 const hoursAgo = (hours: number) => new Date(NOW - hours * 3600_000).toISOString()
 
 const SCAN: ScanOut = {

@@ -65,7 +65,8 @@ test('opens with the welcome dialog, the banner and the static host\'s security 
   await expect(page.getByRole('complementary', { name: en.demo.banner.label })).toContainText(en.demo.banner.text)
   await expect(page).toHaveURL(/\/directories\/1$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Media' })).toBeVisible()
-  await expect(page.getByText(/^Updated \d+ hours? ago$/)).toBeVisible()
+  // Media is scanned daily at 03:00: how long ago depends on the time of day.
+  await expect(page.getByRole('main').getByText(/^Updated (a few seconds ago|\d+ (seconds?|minutes?|hours?) ago|yesterday)$/)).toBeVisible()
 })
 
 for (const [language, messages] of [['en', en], ['es', es]] as [string, Texts][]) {

@@ -94,11 +94,17 @@ uv run python scripts/export_openapi.py --check
   every engine and require identical totals in both measures. An engine whose binary is missing is
   skipped; CI installs all of them.
 - A couple of permission tests are skipped when run as root, because root can read anything.
+- The tests pass on any day, at any hour and in any time zone: the server's time zone is
+  `Etc/UTC`, and the scheduler starts paused (`Scheduler.paused`, also in `smoke_server.py`), so no
+  schedule fires in the middle of a test; tests call the scheduler's methods instead. To check,
+  run them with the clock moved, for example with libfaketime:
+  `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/faketime/libfaketimeMT.so.1 FAKETIME=+45d uv run pytest`.
+  Use relative offsets (`+2d`, `+1y`): they also move the monotonic clock that `time.sleep` needs.
 - `scripts/docker_smoke.sh` builds nothing: it starts the image tagged `IMAGE_TAG` (default `ci`)
   with Compose and a sample tree, checks `/health`, `/api/version`, the four engines, a scan with
   each engine in both measures with matching totals, the user 1000, the read-only file system and
-  the password protection. Build the image first with
-  `docker build --build-arg IMAGE_TAG=ci -t drdonoso/disksprawl:ci .`.
+  the password protection. Its directories have no schedule, so no scheduled scan joins in. Build
+  the image first with `docker build --build-arg IMAGE_TAG=ci -t drdonoso/disksprawl:ci .`.
 
 ## Frontend checks
 
@@ -115,7 +121,14 @@ npm run e2e:demo
 ```
 
 - `npm test` runs the unit tests (Vitest and Testing Library): formatting, the squarified layout,
-  colors, forms, components and the demo's store and handlers.
+  colors, forms, components and the demo's store and handlers. They run in UTC with `Date` frozen
+  at `NOW` (`src/test/clock.ts`, set in `src/test-setup.ts`; timers keep running), so texts such
+  as "3 hours ago" and the demo's data are the same on any day. Use `NOW` for a test's dates, and
+  `vi.setSystemTime` to try another moment.
+- The Playwright tests use the real clock and must pass at any hour: never expect an exact age
+  from data that depends on the time of day. To try a moment, call
+  `page.clock.setSystemTime(...)` before `page.goto(...)`; the demo's data follows the browser's
+  clock.
 - `npm run e2e` runs the Playwright tests of the real application in Chromium against
   `scripts/smoke_server.py`: a disposable server on port 7889 with a fresh database and a sample
   tree, serving the build in `frontend/dist` (run `npm run build` first). They add a directory,

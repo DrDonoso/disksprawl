@@ -93,6 +93,8 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['./src/test-setup.ts'],
       include: ['src/**/*.test.{ts,tsx}'],
       css: { modules: { classNameStrategy: 'non-scoped' } },
+      // Dates are shown in the local time zone: the same one everywhere, like the frozen clock.
+      env: { TZ: 'UTC' },
     },
   }
 })

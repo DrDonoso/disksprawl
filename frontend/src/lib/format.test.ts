@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { setLanguagePreference } from '../i18n'
 import { formatBytes, formatDelta, formatDuration, formatOrdinal, formatPercent, formatRelative } from './format'
-
-const NOW = Date.UTC(2026, 10, 15, 12)
+import { NOW } from '../test/clock'
 
 describe('formatting', () => {
   test('bytes use binary units with three significant digits, in the active language', () => {

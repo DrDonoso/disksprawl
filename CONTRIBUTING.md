@@ -137,6 +137,14 @@ The demo shows the whole interface with synthetic data. New features should look
 its tests (`npm run e2e:demo`) must pass. If a feature cannot work without a server, answer it
 with the explicit "not available in the demo" error.
 
+### Dates and times in tests
+
+Tests must pass on any day, at any hour and in any time zone. The frontend's unit tests run in UTC
+at a fixed moment, `NOW` in `frontend/src/test/clock.ts`; the backend's tests run in `Etc/UTC` with
+the scheduler paused. The browser tests use the real clock, so they must not expect an exact age
+such as "2 hours ago" from data that depends on the time of day (see
+[the checks](docs/development.md#frontend-checks)).
+
 ### Synthetic data only
 
 Tests, fixtures, documentation and screenshots use invented names and generic paths such as

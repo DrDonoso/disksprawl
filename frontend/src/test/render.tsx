@@ -9,11 +9,9 @@ import { handlers, resetDemo } from '../demo/handlers'
 /** The demo API as the backend of component tests (the same rules and error codes). */
 export const server = setupServer(...handlers)
 
-/** A fixed moment: 15 November 2026, 12:00 UTC. */
-export const NOW = Date.UTC(2026, 10, 15, 12)
-
+/** A fresh demo, whose data is relative to the tests' clock (frozen at NOW by src/test-setup.ts). */
 export function resetApi() {
-  return resetDemo({ now: () => NOW })
+  return resetDemo({ now: () => Date.now() })
 }
 
 export function renderWithProviders(ui: ReactElement, { route = '/', path = '*' }: { route?: string; path?: string } = {}) {
