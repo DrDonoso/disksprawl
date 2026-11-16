@@ -19,6 +19,9 @@ reference; these are the rules that matter most.
   (`engines/common.py`) before they reach the tree, errors, progress or the API.
 - **SQLite has one writer**: keep write transactions short; never call the file system (statvfs,
   resolving paths) inside one, and delete large sets of rows in batches (`retention.py`).
+- **Time in tests**: tests must pass on any day, hour and time zone. Frontend unit tests freeze
+  `Date` at `NOW` (`frontend/src/test/clock.ts`) in UTC; backend tests and `smoke_server.py` keep
+  the scheduler paused (`Scheduler.paused`).
 - **Synthetic data only**: no real folder names, host names, addresses or personal data in code,
   tests, fixtures, docs or screenshots; use generic paths such as `/mnt/storage`.
 - **CI**: the required check is the job `application` in `.github/workflows/ci.yml`; keep its
