@@ -85,11 +85,13 @@ and exactly which folders grew or shrank between two scans. It only ever reads y
   the data of the last successful one still shown.
 - A navigable **treemap** with breadcrumbs and a table of each level. Its **Changes** view
   compares two scans: tiles are as big as the folder was at its largest, red when it grew, green
-  when it freed space and grey when nothing changed, with the biggest changes listed.
+  when it freed space and grey when nothing changed, with the biggest changes listed. Earlier scans
+  open in it too, to see the folders as they were then.
 - **Volume capacity** of every folder (like `df`), measured every 15 minutes without walking any
   folder, with warning and critical thresholds. Directories on the same volume are recognized.
 - **History** charts of each directory's size and of its volume's use over 30, 90 or 365 days,
-  and the latest scans with their engine, duration and errors.
+  and the latest scans with their engine, duration and errors. A point of the size chart or the
+  date of a scan opens that scan in the treemap.
 - The whole width of the window, from a phone to an ultrawide screen: on wide screens the treemap
   grows and its table and the latest scans move beside it.
 

@@ -122,6 +122,47 @@ test('"Scan now" shows the progress and then the new data', async ({ page }) => 
   await expect(page.getByRole('main').getByText('Updated a few seconds ago')).toBeVisible()
 })
 
+test('the history opens an earlier scan in the treemap, from its date or from the size chart', async ({ page }) => {
+  await enter(page, '/directories/1')
+  const scans = page.getByRole('region', { name: en.history.recent })
+  const earlier = page.getByRole('status').filter({ hasText: en.treemap.pastScan.split('{')[0].trim() })
+  const scan = page.getByRole('combobox', { name: new RegExp(`^${en.treemap.scan}\\b`) })
+  await expect(scans.getByRole('button').first()).toBeVisible()
+  await expect(earlier).toHaveCount(0)
+
+  // The scan before the latest one, from its date: the page goes up to its treemap.
+  await scans.getByRole('button').nth(1).click()
+  await expect(earlier).toBeVisible()
+  await expect(page).toHaveURL(/[?&]scan=\d+/)
+  await expect(page.getByRole('heading', { name: en.treemap.title })).toBeInViewport()
+  await expect(scan).not.toHaveValue('')
+  await expect(page.getByRole('group', { name: 'Treemap of Media' }).getByRole('button').first()).toBeVisible()
+  await expect(scans.getByRole('button').nth(1)).toHaveAttribute('aria-current', 'true')
+  await expectAccessible(page)
+  // Its changes are those since the scan before it.
+  await page.getByRole('radio', { name: en.treemap.changes }).click()
+  await expect(page.getByRole('heading', { name: en.treemap.biggest })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Folders in Media' }).getByRole('columnheader', { name: en.treemap.columns.size, exact: true })).toBeVisible()
+  await earlier.getByRole('button', { name: en.treemap.showLatest }).click()
+  await expect(earlier).toHaveCount(0)
+  await expect(page).not.toHaveURL(/[?&]scan=/)
+  await expect(scan).toHaveValue('')
+
+  // A point of the size chart: over 30 days every scan of Media keeps its folders.
+  await page.getByRole('radio', { name: '30 days' }).click()
+  const chart = page.getByRole('img', { name: new RegExp(`^${en.history.size}:`) })
+  await chart.scrollIntoViewIfNeeded()
+  const box = await chart.boundingBox()
+  if (!box) throw new Error('the size chart has no box')
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2)
+  await expect(page.getByText(en.history.pointOpen)).toBeVisible()
+  await expectAccessible(page)
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height / 2)
+  await expect(earlier).toBeVisible()
+  await expect(page).toHaveURL(/[?&]scan=\d+/)
+  await expect(page.getByRole('heading', { name: en.treemap.title })).toBeInViewport()
+})
+
 test('a directory can be added, edited and deleted', async ({ page }) => {
   await enter(page, '/?settings=new')
   const dialog = page.getByRole('dialog', { name: en.settings.title })

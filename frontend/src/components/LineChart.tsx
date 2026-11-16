@@ -1,3 +1,4 @@
+import { useState, type CSSProperties, type MouseEvent } from 'react'
 import { useI18n } from '../i18n'
 import { formatDate } from '../lib/format'
 import { useElementSize } from '../lib/hooks'
@@ -7,6 +8,9 @@ export interface Point {
   time: number
   value: number
   label: string
+  /** In charts with `onOpen`: what the point stands for (a scan), and whether it can be opened. */
+  id?: number
+  openable?: boolean
 }
 
 /** A chart's height: 170 px, and taller on wide charts so that their lines keep some slope. */
@@ -16,8 +20,13 @@ function chartHeight(width: number): number {
 
 const PAD = { top: 10, right: 12, bottom: 24, left: 64 }
 
-/** A small line chart in SVG: the value over time, with optional horizontal threshold lines. */
-export function LineChart({ points, label, format, min, max, thresholds = [], color = 'var(--chart-line)' }: {
+/**
+ * A small line chart in SVG: the value over time, with optional horizontal threshold lines. With
+ * `onOpen`, the pointer shows the nearest point in time and a click opens it, if it is openable;
+ * `current` rings the point shown elsewhere. Keyboard users open the same points from other
+ * controls (the latest scans and the treemap's scan selector), so the chart itself stays an image.
+ */
+export function LineChart({ points, label, format, min, max, thresholds = [], color = 'var(--chart-line)', onOpen, current = null }: {
   points: Point[]
   label: string
   format: (value: number) => string
@@ -25,9 +34,12 @@ export function LineChart({ points, label, format, min, max, thresholds = [], co
   max?: number
   thresholds?: { value: number; color: string }[]
   color?: string
+  onOpen?: (point: Point) => void
+  current?: number | null
 }) {
   const { t } = useI18n()
   const [ref, size] = useElementSize<HTMLDivElement>()
+  const [hover, setHover] = useState<number | null>(null)
   const width = Math.max(size.width, 200)
   const height = chartHeight(width)
   if (points.length === 0) return <div ref={ref} className={styles.chart}><p className="muted">{t('history.empty')}</p></div>
@@ -52,8 +64,32 @@ export function LineChart({ points, label, format, min, max, thresholds = [], co
     label, first: format(first.value), firstDate: formatDate(new Date(first.time).toISOString()),
     last: format(last.value), lastDate: formatDate(new Date(last.time).toISOString()),
   })
+
+  /** The point nearest to the pointer along the time axis: dense charts have no room to aim. */
+  function nearest(event: MouseEvent<SVGSVGElement>): number {
+    const pointer = event.clientX - event.currentTarget.getBoundingClientRect().left
+    let best = 0
+    for (let index = 1; index < points.length; index += 1) {
+      if (Math.abs(x(points[index].time) - pointer) < Math.abs(x(points[best].time) - pointer)) best = index
+    }
+    return best
+  }
+
+  const active = onOpen && hover !== null ? points[hover] : undefined
+  const shown = current === null ? undefined : points.find(point => point.id === current)
+  // The tooltip goes on the side of the guide with more room.
+  const tip: CSSProperties | undefined = active && (x(active.time) > width / 2
+    ? { right: size.width - x(active.time) + 10 }
+    : { left: x(active.time) + 10 })
   return <div ref={ref} className={styles.chart}>
-    <svg width={width} height={height} role="img" aria-label={description}>
+    <svg width={width} height={height} role="img" aria-label={description}
+      className={active?.openable ? styles.openable : undefined}
+      onPointerMove={onOpen ? event => setHover(nearest(event)) : undefined}
+      onPointerLeave={onOpen ? () => setHover(null) : undefined}
+      onClick={onOpen ? event => {
+        const point = points[nearest(event)]
+        if (point.openable) onOpen(point)
+      } : undefined}>
       {ticks.map((tick, index) => <g key={index}>
         <line x1={PAD.left} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} className={styles.grid} />
         <text x={PAD.left - 6} y={y(tick) + 4} textAnchor="end" className={styles.axis}>{format(tick)}</text>
@@ -63,11 +99,23 @@ export function LineChart({ points, label, format, min, max, thresholds = [], co
           stroke={threshold.color} strokeDasharray="4 4" />)}
       <polygon points={area} fill="var(--chart-area)" />
       <polyline points={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
-      {points.length <= 120 && points.map((point, index) => <circle key={index} cx={x(point.time)} cy={y(point.value)} r={3} fill={color}>
-        <title>{point.label}</title>
-      </circle>)}
+      {points.length <= 120 && points.map((point, index) => onOpen && !point.openable
+        ? <circle key={index} cx={x(point.time)} cy={y(point.value)} r={2.5} fill="var(--surface)" stroke={color} strokeWidth={1.5} />
+        : <circle key={index} cx={x(point.time)} cy={y(point.value)} r={3} fill={color}>
+          {!onOpen && <title>{point.label}</title>}
+        </circle>)}
+      {shown && <circle cx={x(shown.time)} cy={y(shown.value)} r={7} fill="none" stroke={color} strokeWidth={2} />}
+      {active && <>
+        <line x1={x(active.time)} x2={x(active.time)} y1={PAD.top} y2={height - PAD.bottom} className={styles.guide} />
+        <circle cx={x(active.time)} cy={y(active.value)} r={5} fill={active.openable ? color : 'var(--surface)'}
+          stroke={color} strokeWidth={2} />
+      </>}
       <text x={PAD.left} y={height - 6} className={styles.axis}>{formatDate(new Date(start).toISOString())}</text>
       <text x={width - PAD.right} y={height - 6} textAnchor="end" className={styles.axis}>{formatDate(new Date(end).toISOString())}</text>
     </svg>
+    {active && <div className={styles.tip} style={tip} aria-hidden="true">
+      <span>{active.label}</span>
+      <span className="muted">{active.openable ? t('history.pointOpen') : t('history.pointGone')}</span>
+    </div>}
   </div>
 }

@@ -6,6 +6,35 @@
   gap: 12px;
   padding: 14px 16px 18px;
   min-width: 0;
+  /* Below the sticky top bar when a scan chosen in the history brings the page up to it. */
+  scroll-margin-top: calc(var(--topbar-height) + 12px);
+}
+
+/* It takes the focus only to move the keyboard there, like the main content after the skip link. */
+.explorer:focus {
+  outline: none;
+}
+
+/* A notice about the scan on screen (an earlier one, or one without folders), with the way back. */
+.scanNotice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding-block: 6px;
+}
+
+.scanNotice svg {
+  flex: none;
+}
+
+/* The text stays beside the icon; the button moves below it when there is no room. */
+.scanNotice > span {
+  flex: 1 1 16em;
+}
+
+.latest {
+  margin-left: auto;
 }
 
 .body,
