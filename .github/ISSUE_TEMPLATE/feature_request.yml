@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest a new feature or an improvement for DiskSprawl.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Explaining the problem behind your idea helps find the best solution for everyone.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem would this solve? Describe the situation and why the current behavior falls short.
+      placeholder: My backup share fills up every few weeks, but …
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you would like DiskSprawl to do.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that helps, such as examples from other tools, links or mockups.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this feature has not been requested yet.
+          required: true

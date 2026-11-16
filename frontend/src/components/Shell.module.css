@@ -1,0 +1,86 @@
+.app {
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--topbar-height);
+  padding: 0 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--text);
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.sidebar {
+  position: fixed;
+  top: var(--topbar-height);
+  bottom: var(--demo-banner-height, 0px);
+  left: 0;
+  z-index: 20;
+  width: var(--sidebar-width);
+  overflow-y: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar.closed {
+  display: none;
+}
+
+.overlay {
+  width: min(86vw, var(--sidebar-width));
+  z-index: 40;
+  box-shadow: 4px 0 18px rgba(0, 0, 0, 0.2);
+}
+
+.backdrop {
+  position: fixed;
+  inset: var(--topbar-height) 0 0 0;
+  z-index: 35;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.workspace {
+  min-width: 0;
+}
+
+.withSidebar {
+  margin-left: var(--sidebar-width);
+}
+
+.main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 20px calc(32px + var(--demo-banner-height, 0px));
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .main {
+    padding: 14px 12px calc(28px + var(--demo-banner-height, 0px));
+  }
+}

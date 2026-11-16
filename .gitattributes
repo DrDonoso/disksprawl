@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.woff2 binary
+# Recorded engine outputs: NUL-separated bytes, kept exactly as written.
+tests/fixtures/*.bin binary

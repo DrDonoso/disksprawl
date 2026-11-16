@@ -1,0 +1,52 @@
+.panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-left: 4px solid var(--primary);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.phase {
+  font-size: 1.02rem;
+}
+
+.estimate {
+  font-size: 0.92rem;
+}
+
+.counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin: 0;
+}
+
+.counters div {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.counters dt {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.counters dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.current {
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,34 @@
+// Cloudflare Workers configuration of the public demo (https://demo.disksprawl.drdonoso.com).
+//
+// The demo is a static bundle: no Worker script and no `main` entry. Cloudflare serves the files of
+// `assets.directory` as they are, with the security headers of dist-demo/_headers (written by
+// vite.config.ts); the API is answered in the visitor's browser by the MSW service worker
+// (src/demo/), so nothing runs server-side and there are no secrets.
+//
+// Workers Builds settings (dashboard → Workers & Pages → the Worker → Settings → Build):
+//   Root directory   /frontend            ← this file and package.json live here
+//   Build command    npm run build:demo
+//   Deploy command   npx wrangler@4 deploy
+//   Preview command  npx wrangler@4 preview
+//   Variable         NODE_VERSION = 24    ← Vite 8 needs Node ^20.19 || >=22.12
+// wrangler is not a devDependency (it would slow down every `npm ci`): the commands pin its major.
+//
+// From a terminal instead: `npm run build:demo && npx wrangler@4 deploy` (after `npx wrangler@4 login`).
+//
+// The custom domain below needs its zone in the same Cloudflare account; otherwise add the domain
+// under Settings → Domains & Routes and remove `routes`. To publish your own copy, change `name`
+// and `routes`.
+{
+  "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
+  "name": "disksprawl-demo",
+  "compatibility_date": "2026-11-01",
+  // Required by `wrangler preview`; the static demo needs no Preview-specific bindings.
+  "previews": {},
+  "assets": {
+    "directory": "./dist-demo",
+    // Client-side routes (/directories/3…): navigations that match no file get index.html with
+    // HTTP 200, while a missing asset still answers a real 404.
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [{ "pattern": "demo.disksprawl.drdonoso.com", "custom_domain": true }]
+}

@@ -1,0 +1,107 @@
+# Dependabot version updates: https://docs.github.com/code-security/dependabot
+#
+#   uv              pyproject.toml + uv.lock
+#   npm             frontend/package.json + package-lock.json
+#   github-actions  .github/workflows/*.yml (commit SHA pins and their version comments)
+#   docker          Dockerfile (node, uv and python stages)
+#   docker-compose  docker-compose.yml, docker-compose.local.yml
+#
+# Minor and patch updates are grouped per ecosystem; every major update gets a pull request of its
+# own. Packages that must move together share a group without `update-types`. Security updates
+# ignore groups, limits and the cooldown.
+#
+# The pinned scan engines (ncdu and gdu in scripts/install-engines.sh) are not tracked by Dependabot:
+# update their versions and checksums by hand. When the node, python or uv image changes in the
+# Dockerfile, update node-version, python-version and the uv version in ci.yml to match.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 10
+    open-pull-requests-limit: 5
+    labels: [dependencies, python]
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 10
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps-dev)
+    groups:
+      # react-dom requires the matching react, and the type packages follow them.
+      react:
+        patterns: [react, react-dom, "@types/react", "@types/react-dom"]
+      # @vitejs/plugin-react declares a peer dependency on the vite major.
+      vite:
+        patterns: [vite, "@vitejs/*"]
+      # Every msw update must also refresh frontend/public/mockServiceWorker.js with
+      # `npx msw init public` (Dependabot does not run it), or src/demo/handlers.test.ts fails.
+      msw:
+        patterns: [msw]
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 10
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      github-actions-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 10
+    open-pull-requests-limit: 3
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: chore(docker)
+    groups:
+      docker-minor-patch:
+        patterns: ["*"]
+        # A new Python version counts as a minor update here, but it gets a pull request of its own:
+        # it can break the dependencies, and ci.yml must follow.
+        exclude-patterns: [python]
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 10
+    open-pull-requests-limit: 3
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: chore(docker)

@@ -1,0 +1,18 @@
+[1,2,{"progname":"gdu","progver":"v5.39.0","timestamp":1794773322},
+[{"name":"/srv/tree","asize":1058551,"dsize":53248,"items":15,"mtime":1794773322},
+{"name":"hard1","asize":2048,"dsize":4096,"mtime":1794773322,"ino":544966,"hlnkc":true},
+{"name":"link","asize":3,"mtime":1794773322,"notreg":true},
+{"name":"sparse","asize":1048576,"mtime":1794773322},
+[{"name":"empty","asize":512,"dsize":4096,"items":1,"mtime":1794773322}
+],
+[{"name":"locked","asize":512,"dsize":4096,"items":1,"mtime":1794773322,"read_error":true}
+],
+[{"name":"a b","asize":6000,"dsize":20480,"items":5,"mtime":1794773322},
+{"name":"f1","asize":1000,"dsize":4096,"mtime":1794773322},
+{"name":"hard2","asize":2048,"dsize":4096,"mtime":1794773322,"ino":544966,"hlnkc":true},
+[{"name":"c","asize":5000,"dsize":12288,"items":2,"mtime":1794773322},
+{"name":"f2","asize":5000,"dsize":8192,"mtime":1794773322}]],
+[{"name":"nl\nline","asize":123,"dsize":8192,"items":2,"mtime":1794773322},
+{"name":"inner","asize":123,"dsize":4096,"mtime":1794773322}],
+[{"name":"uni-ñandú","asize":777,"dsize":8192,"items":2,"mtime":1794773322},
+{"name":"fíle","asize":777,"dsize":4096,"mtime":1794773322}]]]

@@ -1,0 +1,35 @@
+# Local try-out: builds the image from this checkout and analyzes a synthetic sample tree.
+#
+#   python3 scripts/make_sample_tree.py sample
+#   docker compose -f docker-compose.local.yml up -d --build
+#
+# Then open http://localhost:7780 and add /data/sample in Settings → Directories. To see changes
+# between scans, run `python3 scripts/make_sample_tree.py sample --mutate 1` and scan again.
+name: disksprawl-local
+services:
+  app:
+    build:
+      context: .
+    image: disksprawl:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-7780}:7780"
+    environment:
+      TZ: "${TZ:-Etc/UTC}"
+      AUTH_PASSWORD: "${AUTH_PASSWORD:-}"
+      AUTH_SECRET: "${AUTH_SECRET:-}"
+      AUTH_COOKIE_SECURE: "false"
+      SESSION_HOURS: "${SESSION_HOURS:-168}"
+      TRUSTED_PROXY_IPS: "127.0.0.1"
+    volumes:
+      - data:/app/data
+      - ./sample:/data/sample:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  data:
