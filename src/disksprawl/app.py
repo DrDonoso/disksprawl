@@ -25,7 +25,16 @@ from .security import SecurityMiddleware
 log = logging.getLogger("disksprawl")
 # Client-side routes of the web app: everything else outside /api is a static file or a 404.
 APP_ROUTES = ("", "settings")
-STATIC_FILES = ("icon.svg", "favicon.ico", "apple-touch-icon.png", "robots.txt")
+STATIC_FILES = (
+    "icon.svg",
+    "favicon.ico",
+    "apple-touch-icon.png",
+    "icon-192.png",
+    "icon-512.png",
+    "icon-maskable-512.png",
+    "manifest.webmanifest",
+    "robots.txt",
+)
 
 
 class DiskSprawlApp(FastAPI):
