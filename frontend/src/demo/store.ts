@@ -124,16 +124,22 @@ export class DemoStore {
     const backups = this.add({ ...base, name: 'Backups', path: '/data/backups', cron: '0 5 * * 0', engine: 'ncdu', threads: 1, pace: 'balanced' }, backupsModel(now), year)
     const documents = this.add({ ...base, name: 'Documents', path: '/data/documents', cron: '0 */6 * * *', engine: 'du', threads: 1, pace: 'max', low_priority: false }, documentsModel(now), year)
     const r = random(7100)
-    // Something to compare right away: a film added between the last two scans of Media.
-    const mediaRuns = cronRuns(media.directory.cron ?? '0 3 * * *', 2, now - 2 * DAY, this.timezone)
-    const latest = Math.max(...mediaRuns.filter(time => time < now - 3600_000))
-    media.model.leaves.push({ path: 'Movies/Sunday Machine (2026)', born: latest - 9 * 3600_000, size: 31 * 2 ** 30, files: 2 })
     for (const { directory, model } of [media, photos, backups, documents]) {
-      const runs = cronRuns(directory.cron ?? '0 3 * * *', 2000, year, this.timezone).filter(time => time < now)
-      runs.forEach((time, index) => {
-        const started = Math.round(time + r.between(4, 80) * 1000)
-        const finished = Math.round(started + model.seconds * r.between(0.85, 1.2) * 1000)
-        if (finished >= now) return
+      // Every scheduled run so far, with its random start and duration. Those still running now
+      // are left out, so what follows is relative to the scans that exist at any time of day.
+      const runs = cronRuns(directory.cron ?? '0 3 * * *', 2000, year, this.timezone)
+        .filter(time => time < now)
+        .map(time => {
+          const started = Math.round(time + r.between(4, 80) * 1000)
+          return { time, started, finished: Math.round(started + model.seconds * r.between(0.85, 1.2) * 1000) }
+        })
+        .filter(run => run.finished < now)
+      if (directory.id === media.directory.id) {
+        // Something to compare right away: a film added between the last two scans.
+        const latest = runs[runs.length - 1].time
+        model.leaves.push({ path: 'Movies/Sunday Machine (2026)', born: latest - 9 * 3600_000, size: 31 * 2 ** 30, files: 2 })
+      }
+      runs.forEach(({ time, started, finished }, index) => {
         // Media moved from the native engine to gdu five months ago.
         const engine: Engine = directory.id === media.directory.id && time < now - 150 * DAY ? 'native' : directory.engine
         let status: Status = 'completed'

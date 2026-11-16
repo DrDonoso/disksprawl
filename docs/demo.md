@@ -30,7 +30,7 @@ in a real installation:
 ## The data
 
 The demo describes a fictional home server with four directories, generated deterministically and
-relative to the current date, so it always looks recent:
+relative to the current date, so it always looks recent, whatever the day and the hour:
 
 | Directory | Engine and schedule | What it shows |
 | --- | --- | --- |

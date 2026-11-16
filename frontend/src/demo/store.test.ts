@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'vitest'
+import { NOW } from '../test/clock'
 import { DAY } from './model'
 import { DemoError, DemoStore, biggestChanges } from './store'
-
-const NOW = Date.UTC(2026, 10, 15, 12)
 
 function store(now = NOW) {
   let time = now
@@ -53,6 +52,21 @@ describe('the synthetic data', () => {
     expect(old?.has_detail).toBe(false)
     expect(() => demo.tree(1, old?.id ?? 0, '')).toThrow(DemoError)
   })
+
+  test('looks the same at any time of day', () => {
+    // While a scheduled scan of Documents runs (every 6 hours), and once the daily scan of Media
+    // has finished: the latest attempt of Documents still failed, and the film still shows up as
+    // new between the last two scans of Media.
+    for (const time of [Date.UTC(2026, 10, 15, 18, 1), Date.UTC(2026, 10, 16, 3, 50)]) {
+      const demo = new DemoStore({ now: () => time })
+      const list = demo.list()
+      const at = new Date(time).toISOString()
+      expect(list.find(item => item.directory.name === 'Documents')?.last_attempt?.status, at).toBe('failed')
+      for (const item of list) expect(Date.parse(item.last_scan?.finished_at ?? ''), at).toBeLessThan(time)
+      const movies = demo.diff(1, null, null, 'Movies')
+      expect(movies.children.find(child => child.name === 'Sunday Machine (2026)'), at).toMatchObject({ before: null })
+    }
+  }, 30_000)
 })
 
 describe('simulated scans', () => {
