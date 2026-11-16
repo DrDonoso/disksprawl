@@ -81,9 +81,14 @@
 }
 
 .chart {
+  position: relative;
   width: 100%;
   min-height: 60px;
   overflow: hidden;
+}
+
+.openable {
+  cursor: pointer;
 }
 
 .grid {
@@ -91,10 +96,33 @@
   stroke-width: 1;
 }
 
+.guide {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
 .axis {
   fill: var(--text-muted);
   font-size: 11px;
   font-family: var(--font);
+}
+
+/* What the pointer is on, beside the guide (the same is in the latest scans, for the keyboard). */
+.tip {
+  position: absolute;
+  top: 4px;
+  display: grid;
+  width: max-content;
+  max-width: calc(50% - 14px);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  pointer-events: none;
 }
 
 .tableWrap {
@@ -105,6 +133,30 @@
 
 .scroll {
   overflow-x: auto;
+}
+
+/* The date of a scan that keeps its folders: it opens them in the treemap. */
+.open {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.open:hover {
+  color: var(--primary-hover);
+}
+
+/* The scan the treemap shows. */
+.current td {
+  background: var(--surface-2);
+}
+
+.current .open {
+  font-weight: 700;
 }
 
 .warn {

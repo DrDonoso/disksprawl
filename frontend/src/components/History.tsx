@@ -23,24 +23,40 @@ function StatusCell({ scan }: { scan: ScanOut }) {
   return <span className={scan.status === 'completed' ? '' : 'muted'}>{label}</span>
 }
 
-/** Size of the directory per scan, use of its volume, and the latest scans. */
-export function History({ directoryId, settings }: { directoryId: number; settings?: SettingsOut }) {
+/**
+ * Size of the directory per scan, use of its volume, and the latest scans. A scan that keeps its
+ * folders opens in the treemap from its point in the size chart or from its date.
+ */
+export function History({ directoryId, settings, shown, onOpen }: {
+  directoryId: number
+  settings?: SettingsOut
+  /** The scan chosen for the treemap; null when it shows the latest one. */
+  shown: number | null
+  /** Shows a scan in the treemap; null, the latest one. */
+  onOpen: (scan: number | null) => void
+}) {
   const { t } = useI18n()
   const [days, setDays] = useState<Range>(90)
   const scans = useScans(directoryId, days)
   const capacity = useCapacityHistory(directoryId, days)
-  const completed = (scans.data?.items ?? []).filter(scan => scan.status === 'completed' && scan.finished_at && scan.total_bytes !== null)
+  const items = scans.data?.items ?? []
+  const completed = items.filter(scan => scan.status === 'completed' && scan.finished_at && scan.total_bytes !== null)
+  // Choosing the latest scan with folders goes back to the default view, which follows new scans.
+  const latest = items.find(scan => scan.status === 'completed' && scan.has_detail)
+  const open = (id: number) => onOpen(id === latest?.id ? null : id)
   const sizePoints: Point[] = completed.slice().reverse().map(scan => ({
     time: new Date(scan.finished_at as string).getTime(),
     value: scan.total_bytes as number,
     label: `${formatDateTime(scan.finished_at)}: ${formatBytes(scan.total_bytes)}`,
+    id: scan.id,
+    openable: scan.has_detail,
   }))
   const volumePoints: Point[] = (capacity.data?.points ?? []).map(point => ({
     time: new Date(point.measured_at).getTime(),
     value: point.percent,
     label: `${formatDateTime(point.measured_at)}: ${formatPercent(point.percent / 100, undefined, 1)}`,
   }))
-  const recent = (scans.data?.items ?? []).slice(0, 10)
+  const recent = items.slice(0, 10)
   return <section className={`card ${styles.history}`} aria-labelledby="history-title">
     <div className={styles.head}>
       <h2 id="history-title">{t('history.title')}</h2>
@@ -56,7 +72,8 @@ export function History({ directoryId, settings }: { directoryId: number; settin
       <div className={styles.charts}>
         <figure>
           <figcaption>{t('history.size')}</figcaption>
-          <LineChart points={sizePoints} label={t('history.size')} format={value => formatBytes(value)} />
+          <LineChart points={sizePoints} label={t('history.size')} format={value => formatBytes(value)}
+            onOpen={point => { if (point.id !== undefined) open(point.id) }} current={shown} />
         </figure>
         <figure>
           <figcaption>{t('history.volume')}</figcaption>
@@ -81,18 +98,27 @@ export function History({ directoryId, settings }: { directoryId: number; settin
               <th scope="col" className="number">{t('history.columns.size')}</th>
             </tr></thead>
             <tbody>
-              {recent.map(scan => <tr key={scan.id}>
-                <td className="nowrap">{formatDateTime(scan.finished_at ?? scan.started_at ?? scan.queued_at)}</td>
-                <td><StatusCell scan={scan} /></td>
-                <td>{t(`history.triggers.${scan.trigger}`)}</td>
-                <td>{t(`engines.${scan.engine}.name`)}</td>
-                <td className="number">{formatDuration(scan.duration_seconds)}</td>
-                <td className="number">{scan.total_bytes === null ? '—' : formatBytes(scan.total_bytes)}</td>
-              </tr>)}
+              {recent.map(scan => {
+                const date = formatDateTime(scan.finished_at ?? scan.started_at ?? scan.queued_at)
+                const current = scan.id === shown
+                return <tr key={scan.id} className={current ? styles.current : undefined}>
+                  <td className="nowrap">{scan.status === 'completed' && scan.has_detail
+                    ? <button type="button" className={styles.open} aria-current={current || undefined} onClick={() => open(scan.id)}>
+                      {date} <span className="visually-hidden">({t('history.openHint')})</span>
+                    </button>
+                    : date}</td>
+                  <td><StatusCell scan={scan} /></td>
+                  <td>{t(`history.triggers.${scan.trigger}`)}</td>
+                  <td>{t(`engines.${scan.engine}.name`)}</td>
+                  <td className="number">{formatDuration(scan.duration_seconds)}</td>
+                  <td className="number">{scan.total_bytes === null ? '—' : formatBytes(scan.total_bytes)}</td>
+                </tr>
+              })}
             </tbody>
           </table>
         </div>
       </div>}
     </div>
+    {latest && settings && <p className="muted small">{t('history.help', { count: settings.keep_scans })}</p>}
   </section>
 }

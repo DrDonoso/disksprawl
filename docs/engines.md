@@ -243,8 +243,8 @@ folders and the files directly inside a folder appear together as "Loose files a
 The totals always include them.
 
 The last **30** completed scans of each directory keep their folders (also adjustable), for the
-treemap and the comparisons; older scans keep only their totals, for the history. Deleting a
-directory deletes its history, never your files.
+treemap, where any of them opens from the history, and the comparisons; older scans keep only
+their totals, for the history. Deleting a directory deletes its history, never your files.
 
 ## Engine versions
 

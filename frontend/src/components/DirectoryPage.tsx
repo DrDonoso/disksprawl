@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { useParams } from 'react-router'
+import { useCallback, useEffect, useRef } from 'react'
+import { useParams, useSearchParams } from 'react-router'
 import { ApiError, errorMessage } from '../api/client'
 import { useOverview, useRefreshDirectory, useScanNow, useSettings } from '../api/hooks'
 import type { DirectorySummaryOut, ScanOut } from '../api/schema.gen'
@@ -8,7 +8,7 @@ import { failureReason } from '../lib/messages'
 import { formatDateTime, formatDuration, formatRelative, formatShortDateTime } from '../lib/format'
 import { useNow } from '../lib/hooks'
 import { Cards } from './Cards'
-import { Explorer } from './Explorer'
+import { Explorer, scanParam } from './Explorer'
 import { History } from './History'
 import { Icon } from './Icon'
 import { ScanProgress } from './ScanProgress'
@@ -73,6 +73,25 @@ export function DirectoryPage() {
   const now = useNow()
   const active = Boolean(overview.data?.progress)
   const wasActive = useRef(active)
+  const [search, setSearch] = useSearchParams()
+  const contents = useRef<HTMLElement>(null)
+
+  // A scan chosen in the history (null: the latest) goes to the treemap, and so do the page and
+  // the keyboard: the treemap is above the history.
+  const openScan = useCallback((scan: number | null) => {
+    setSearch(previous => {
+      const next = new URLSearchParams(previous)
+      if (scan === null) next.delete('scan')
+      else next.set('scan', String(scan))
+      next.delete('from')
+      return next
+    })
+    const section = contents.current
+    if (!section) return
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    section.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' })
+    section.focus({ preventScroll: true })
+  }, [setSearch])
 
   // When a scan ends, everything on screen reloads with the new data.
   useEffect(() => {
@@ -110,11 +129,11 @@ export function DirectoryPage() {
     {progress && <ScanProgress progress={progress} />}
     <Cards summary={summary} settings={settings.data} now={now} />
     {last
-      ? <Explorer summary={summary} />
+      ? <Explorer summary={summary} ref={contents} />
       : !progress && <section className={`card ${styles.empty}`}>
         <h2>{t('directory.emptyTitle')}</h2>
         <p className="muted">{t('directory.emptyText')}</p>
       </section>}
-    <History directoryId={id} settings={settings.data} />
+    <History directoryId={id} settings={settings.data} shown={scanParam(search, 'scan')} onOpen={openScan} />
   </div>
 }
