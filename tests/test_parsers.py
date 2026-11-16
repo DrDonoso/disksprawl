@@ -4,10 +4,15 @@ The recorded tree has names with spaces, a newline and accents, a hard link in t
 symbolic link, a sparse file, an empty folder, an unreadable folder and an excluded `.snapshot`.
 """
 
+import contextlib
 import io
+import json
+import sys
+from pathlib import Path
 
-from conftest import load_fixture
+from conftest import FIXTURES, load_fixture
 
+from disksprawl.engines.__main__ import run
 from disksprawl.engines.common import ErrorLog, Job, Progress, Tree
 from disksprawl.engines.du import du_command, du_error, parse_du, shell_unquote
 from disksprawl.engines.gdu import gdu_command, gdu_errors, ignore_patterns, parse_gdu
@@ -72,6 +77,37 @@ def test_ncdu_terminal_progress() -> None:
     terminal.feed("\x1b[1F\x1b[2K120 files /  20.0 MiB\r\n  #1: /srv/tree/z\r\n5000 files /   1.3 GiB\r\n")
     assert (progress.phase, progress.files, progress.current) == ("finishing", 3748, "a b/c")
     assert progress.bytes == int(1.2 * 2**30)
+
+
+def test_ncdu_with_several_threads_counts_folders_with_the_files(tmp_path: Path) -> None:
+    """Its terminal counter adds up files and folders: no folders are reported until the export
+    has been read. Once the counter starts again for the export, the scan is finishing."""
+    fake = tmp_path / "ncdu"
+    fake.write_text(f"""#!{sys.executable}
+import sys, time
+for line, wait in (("10 files /   1.0 MiB", 0.7), ("  #1: {ROOT}/a b", 0.7),
+                   ("20 files /   2.0 MiB", 0.7), ("3 files /   0.1 MiB", 1.2)):
+    print(line, file=sys.stderr, flush=True)
+    time.sleep(wait)
+sys.stdout.buffer.write(open({str(FIXTURES / "ncdu.json")!r}, "rb").read())
+""")
+    fake.chmod(0o755)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        _, _, progress = run(job(threads=2, binary=str(fake)))
+        progress.stop()
+    lines = [json.loads(line) for line in out.getvalue().splitlines()]
+    counters = [(line["phase"], line["dirs"], line["files"]) for line in lines]
+    walk = [counter for counter in counters if counter[0] == "scanning"]
+    # The walk: folders counted with the files, which only grow.
+    assert walk and counters[: len(walk)] == walk
+    assert all(dirs is None for _, dirs, _ in walk)
+    read = [files for _, _, files in walk]
+    assert read == sorted(read)
+    # The export: finishing with the walk's counters, then the export's own.
+    assert ("finishing", None, 20) in counters and all(files != 3 for _, _, files in counters)
+    assert counters[-1] == ("finishing", FOLDERS + 1, FILES)
+    assert lines[-1]["current"] == "a b"
 
 
 def test_gdu_export_counts_like_du() -> None:

@@ -72,7 +72,8 @@ def progress_out(scan: Scan, live: Live | None, positions: dict[int, int]) -> Pr
         started_at=scan.started_at,
         elapsed_seconds=round(elapsed, 1),
         counters=live.counters,
-        dirs=live.dirs,
+        # Folders counted with the files (ncdu with several threads) show no count of their own.
+        dirs=live.dirs if live.dirs is not None else 0,
         files=live.files,
         bytes=live.done_bytes,
         current=live.current,

@@ -113,7 +113,8 @@ ncdu --ignore-config -1 -o- [-x] [--exclude PATTERN …] -t THREADS   # several 
   It is as light as du and also counts files.
 - With **several threads** (`-t`) it is faster, but builds the whole tree in memory and writes it
   at the end. Meanwhile, DiskSprawl reads the one-line progress it draws on a terminal (`-1`) to
-  show approximate counters and the folder being read.
+  show approximate counters and the folder being read; its count of files includes the folders.
+  While ncdu then writes its export, the scan is adding up the results.
 - ncdu measures both the apparent size and the space on disk in the same walk; DiskSprawl uses
   the one the directory asks for.
 
@@ -209,11 +210,29 @@ is mounted with `iocharset=utf8`; over NFS and on local disks they are the bytes
 
 While a scan runs, the interface shows its phase (queued with its place in the queue, scanning, or
 saving the results), the time elapsed and the engine's counters. When the directory has a
-previous completed scan, it also estimates the **percentage done** and the **time left**: it
-compares the bytes read so far with the previous total (or, for du, the finished folders with the
-previous folder count). The estimate is marked as approximate and stays at 99 % at most until the
-scan ends. The first scan of a directory shows its counters only. gdu shows the time elapsed and
-how long the previous scan took.
+previous completed scan, it also estimates the **percentage done** and the **time left**.
+
+The percentage compares the **folders and files** read so far with those of the previous scan.
+Bytes would mislead: a scan only reads each entry's details, which takes as long for a 40 GB video
+as for a small photo, so a scan that meets the large files first reads most of the bytes in a
+fraction of its time and then stays near 99 % while the small files go by. The work counted is
+the **files plus ten times the folders**, against the same sum for the previous scan: listing a
+folder costs about as much time as reading the details of ten files (from a few to a few dozen,
+depending on the storage). Weighing folders by their number, rather than giving them a fixed half
+of the estimate, matters because a folder is counted only once its listing ends: a folder of many
+files and no subfolders would otherwise stay at 50 % until it was done.
+
+- du counts no files, so its estimate uses the folders alone, and so does any scan compared with a
+  du scan.
+- ncdu with several threads counts files and folders together, in a single counter, which is
+  compared with the previous scan's files and folders.
+- gdu has no estimate: it shows the time elapsed and how long the previous scan took.
+
+The time left follows the pace of this scan so far, not the previous scan's duration, which may
+have used other threads or another pace. The estimate is marked as approximate and stays at 99 % at
+most until the scan ends. The first scan of a directory shows its counters only: there is nothing
+to compare with. The volume's used space would mislead for the reason above, and its count of
+files, when it reports one, covers the whole volume rather than the directory.
 
 ## What is stored
 

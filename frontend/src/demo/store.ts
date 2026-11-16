@@ -342,17 +342,17 @@ export class DemoStore {
     const root = target.get('') ?? { size: 0, files: 0, dirs: 0 }
     const paths = [...target.keys()].filter(Boolean)
     const counters = scan.engine !== 'gdu'
-    const comparable = previous && previous.options.measure === scan.options.measure
-    const percent = counters && comparable && elapsed < scanning ? Math.min(0.99, share) : null
+    // The scanned folder counts as read, as the engines count it.
+    const dirs = counters ? Math.round((root.dirs + 1) * share) : 0
+    const files = counters && scan.engine !== 'du' ? Math.round(root.files * share) : null
+    const percent = counters && previous && elapsed < scanning ? estimate(dirs, files, previous) : null
     return {
       ...base, status: 'running', phase: elapsed < scanning ? 'scanning' : 'saving', position: null, started_at: scan.started_at,
-      elapsed_seconds: Math.round(elapsed / 100) / 10, counters,
-      dirs: counters ? Math.round(root.dirs * share) : 0,
-      files: counters && scan.engine !== 'du' ? Math.round(root.files * share) : null,
+      elapsed_seconds: Math.round(elapsed / 100) / 10, counters, dirs, files,
       bytes: counters ? Math.round(root.size * share) : 0,
       current: (scan.engine === 'native' || scan.engine === 'ncdu') && paths.length ? paths[Math.min(paths.length - 1, Math.floor(share * paths.length))] : null,
       percent: percent === null ? null : Math.round(percent * 10000) / 10000,
-      remaining_seconds: percent !== null && elapsed >= 2000 ? Math.round((scanning - elapsed) / 1000) : null,
+      remaining_seconds: percent !== null && percent >= 0.01 && elapsed >= 2000 ? Math.round((elapsed / 1000) * (1 - percent) / percent) : null,
       previous_duration_seconds: previous?.duration_seconds ?? null,
     }
   }
@@ -647,6 +647,23 @@ export class DemoStore {
   engines(): EngineOut[] {
     return ENGINES.map(engine => ({ ...engine }))
   }
+}
+
+/** Listing a folder costs about as much time as reading the details of ten files. */
+const FOLDER_COST = 10
+
+/**
+ * The share done of a scan, estimated like the server's (Live.estimate in scanning.py): the files
+ * read plus ten times the folders, against the same for the previous completed scan, 99 % at most.
+ * du counts no files, and a du scan as the previous one has none: folders only.
+ */
+function estimate(dirs: number, files: number | null, previous: Pick<ScanOut, 'dir_count' | 'file_count'>): number | null {
+  if (previous.dir_count === null) return null
+  const folders = previous.dir_count + 1
+  const [done, total] = files === null || previous.file_count === null
+    ? [dirs, folders]
+    : [files + FOLDER_COST * dirs, previous.file_count + FOLDER_COST * folders]
+  return done ? Math.min(0.99, done / total) : null
 }
 
 function percentOf(used: number, free: number): number {

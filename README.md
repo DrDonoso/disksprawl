@@ -73,7 +73,8 @@ and exactly which folders grew or shrank between two scans. It only ever reads y
   runs. One queue for all directories, so two scans never compete for the same disks; a scheduled
   scan missed by less than an hour, during a restart for example, still runs.
 - **Live progress** of the running scan: folders, files and bytes read, the folder being read, and
-  an estimated percentage and time left from the previous scan. Scans can be cancelled.
+  an estimated percentage and time left that compare the folders and files read with the previous
+  scan. Scans can be cancelled.
 - Apparent size or space on disk, hard links counted once, symbolic links not followed, an option
   to stay on one file system (`du -x`) and exclusion patterns. Snapshot folders (`.snapshot`,
   `#snapshot`, `.zfs`) are excluded by default so nothing is counted twice; recycle bins count.

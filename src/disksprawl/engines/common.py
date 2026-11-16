@@ -276,6 +276,9 @@ class Progress:
         self.live = live
         self.dirs = 0
         self.files: int | None = 0
+        # True while the folders are counted with the files, in `files` (ncdu with several threads
+        # draws a single counter): `dirs` is reported as null.
+        self.dirs_in_files = False
         self.bytes = 0
         self.current: str | None = None
         self.phase = "scanning"
@@ -289,7 +292,7 @@ class Progress:
             "type": "progress",
             "phase": self.phase,
             "live": self.live,
-            "dirs": self.dirs,
+            "dirs": None if self.dirs_in_files else self.dirs,
             "files": self.files,
             "bytes": self.bytes,
             "current": display_name(current) if current is not None else None,
