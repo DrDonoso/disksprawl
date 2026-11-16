@@ -130,8 +130,10 @@ async function serve() {
   if (await reachable(baseUrl)) return null
   if (!['127.0.0.1', 'localhost'].includes(baseUrl.hostname)) throw new Error(`${baseUrl} does not answer`)
   if (!existsSync(resolve(frontend, 'dist-demo', 'index.html'))) throw new Error('Build the demo first: npm run build:demo')
-  const server = spawn('npx', ['vite', 'preview', '--mode', 'demo', '--host', baseUrl.hostname, '--port', baseUrl.port || '80', '--strictPort'], {
-    cwd: frontend, stdio: 'ignore', shell: process.platform === 'win32',
+  // Vite's CLI run by this Node directly: through npx, kill() would stop npx and leave the server running.
+  const vite = resolve(frontend, 'node_modules', 'vite', 'bin', 'vite.js')
+  const server = spawn(process.execPath, [vite, 'preview', '--mode', 'demo', '--host', baseUrl.hostname, '--port', baseUrl.port || '80', '--strictPort'], {
+    cwd: frontend, stdio: 'ignore',
   })
   for (let attempt = 0; attempt < 60; attempt++) {
     if (await reachable(baseUrl)) return server
