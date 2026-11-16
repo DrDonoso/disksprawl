@@ -4,6 +4,7 @@ import { api, queryClient } from '../api/client'
 import { useAuthStatus, useDirectories } from '../api/hooks'
 import { useI18n } from '../i18n'
 import { Icon } from './Icon'
+import { Preferences } from './Preferences'
 import { SettingsDialog, type SettingsTarget } from './SettingsDialog'
 import { Sidebar } from './Sidebar'
 import styles from './Shell.module.css'
@@ -93,6 +94,7 @@ export function Shell({ banner }: { banner?: ReactNode }) {
         <span>DiskSprawl</span>
       </Link>
       <div className={styles.actions}>
+        <Preferences />
         <button type="button" className="icon-button" aria-label={t('shell.settings')} title={t('shell.settings')}
           onClick={() => openSettings('directories')}>
           <Icon name="settings" />

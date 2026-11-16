@@ -14,6 +14,7 @@ the web interface.
 - [Host names and reverse proxies](#host-names-and-reverse-proxies)
 - [Folders to analyze](#folders-to-analyze)
 - [Settings in the interface](#settings-in-the-interface)
+- [Language and theme](#language-and-theme)
 - [Set by the image](#set-by-the-image)
 - [Applying changes](#applying-changes)
 - [Development and test variables](#development-and-test-variables)
@@ -151,9 +152,20 @@ checks the expression as you type and shows its next three runs.
 | Smallest folder stored | 1 MiB | 1–1024 | Smaller folders count in the totals and appear as "loose files and small folders". |
 | Warning threshold | 80 % | 1–99 | From this use on, a volume's bar turns amber. |
 | Critical threshold | 90 % | 2–100 | From this use on, it turns red. Must be above the warning threshold. |
-| Language | Automatic | — | English or Spanish; stored in this browser only. |
 
-The light or dark theme follows the browser and the operating system.
+## Language and theme
+
+Two menus in the top bar, next to **⚙**, also on the sign-in page:
+
+| Menu | Options | Default |
+| --- | --- | --- |
+| Language (globe) | English, Español | English, whatever the browser's language |
+| Theme (sun, moon or screen) | Light, Dark, Automatic (system) | Automatic: light or dark as the operating system or the browser prefers, following it when it changes |
+
+Each browser keeps its own choice (in its local storage, not on the server), and other open tabs
+follow a change. The theme is applied before the page is drawn, so it never flashes in the other
+one; native controls such as scroll bars and lists, the browser's own bar on phones, the treemap
+and the charts follow it.
 
 ## Set by the image
 

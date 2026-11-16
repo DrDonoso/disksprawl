@@ -3,11 +3,12 @@ import { I18nProvider } from 'react-aria-components'
 import { en } from './locales/en'
 import { es } from './locales/es'
 import type {
-  Dictionary, IntlLocale, Language, LanguagePreference, Messages, Params, PluralMessage, Translate,
-  TranslateArgs, TranslateRich, TranslationKey,
+  Dictionary, IntlLocale, Language, Messages, Params, PluralMessage, Translate, TranslateArgs, TranslateRich,
+  TranslationKey,
 } from './types'
 
-export type { Dictionary, Language, LanguagePreference, TranslationKey } from './types'
+export { LANGUAGES } from './types'
+export type { Dictionary, Language, TranslationKey } from './types'
 
 export const DICTIONARIES: Readonly<Record<Language, Messages<Dictionary>>> = { en, es }
 export const INTL_LOCALES: Readonly<Record<Language, IntlLocale>> = { en: 'en-GB', es: 'es-ES' }
@@ -92,33 +93,17 @@ function translateRich(language: Language, key: string, tags: Readonly<Record<st
   return nodes.map((node, index) => createElement(Fragment, { key: index }, node))
 }
 
-/** The stored preference: a fixed language, or `auto` (the browser's). */
-export function storedPreference(): LanguagePreference {
+/** The language chosen in this browser: English until another one is chosen, whatever the browser's. */
+export function storedLanguage(): Language {
   try {
     const value = localStorage.getItem(LANGUAGE_STORAGE_KEY)
-    return isLanguage(value) ? value : 'auto'
+    return isLanguage(value) ? value : 'en'
   } catch {
-    return 'auto'
+    return 'en'
   }
 }
 
-/** First supported language among the browser's preferences. */
-export function browserLanguage(): Language {
-  if (typeof navigator === 'undefined') return 'en'
-  const preferences = navigator.languages?.length ? navigator.languages : [navigator.language]
-  for (const tag of preferences) {
-    const primary = typeof tag === 'string' ? tag.split(/[-_]/)[0].toLowerCase() : ''
-    if (isLanguage(primary)) return primary
-  }
-  return 'en'
-}
-
-function detect(): Language {
-  const preference = storedPreference()
-  return preference === 'auto' ? browserLanguage() : preference
-}
-
-let current: Language = detect()
+let current: Language = storedLanguage()
 const listeners = new Set<() => void>()
 
 function apply(next: Language) {
@@ -131,21 +116,27 @@ export function getLanguage(): Language {
   return current
 }
 
-/** Stores the preference on this device and applies it. */
-export function setLanguagePreference(preference: LanguagePreference) {
+/** Stores the language in this browser and applies it. */
+export function setLanguage(language: Language) {
   try {
-    if (preference === 'auto') localStorage.removeItem(LANGUAGE_STORAGE_KEY)
-    else localStorage.setItem(LANGUAGE_STORAGE_KEY, preference)
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language)
   } catch {
     console.warn('The language preference could not be stored.')
   }
-  apply(preference === 'auto' ? browserLanguage() : preference)
+  apply(language)
 }
 
-/** Detects the language again (tests call it before each test). */
+/** Reads the stored language again (tests call it before each test). */
 export function resetLanguage(): Language {
-  apply(detect())
+  apply(storedLanguage())
   return current
+}
+
+if (typeof window !== 'undefined') {
+  // Every tab follows a change made in another one.
+  window.addEventListener('storage', event => {
+    if (event.key === LANGUAGE_STORAGE_KEY || event.key === null) apply(storedLanguage())
+  })
 }
 
 export function subscribeLanguage(listener: () => void): () => void {

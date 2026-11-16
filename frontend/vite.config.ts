@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
@@ -75,12 +78,48 @@ function withoutMockServiceWorker(): Plugin {
   }
 }
 
+/**
+ * src/lib/theme-boot.js, which applies the stored theme before the first paint, as a classic,
+ * blocking script in <head>, after the meta tags it updates and before the stylesheets (a module
+ * script runs after the first paint, and the Content Security Policy forbids inline scripts).
+ * Builds emit it to /assets/ with a hash of its content, cached like the rest of the bundle; the
+ * development server serves it as it is.
+ */
+function themeBoot(): Plugin[] {
+  const file = fileURLToPath(new URL('./src/lib/theme-boot.js', import.meta.url))
+  const inject = (html: string, src: string) => {
+    if (!html.includes('<title>')) throw new Error('index.html has no <title> to put the theme script before')
+    return html.replace('<title>', `<script src="${src}"></script>\n    <title>`)
+  }
+  let fileName = ''
+  return [{
+    name: 'disksprawl:theme-boot',
+    apply: 'build',
+    buildStart() {
+      const source = readFileSync(file, 'utf8')
+      fileName = `assets/theme-${createHash('sha256').update(source).digest('hex').slice(0, 10)}.js`
+      this.emitFile({ type: 'asset', fileName, source })
+    },
+    transformIndexHtml: html => inject(html, `/${fileName}`),
+  }, {
+    name: 'disksprawl:theme-boot-dev',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/theme-boot.js', (_request, response) => {
+        response.setHeader('Content-Type', 'text/javascript')
+        response.end(readFileSync(file))
+      })
+    },
+    transformIndexHtml: html => inject(html, '/theme-boot.js'),
+  }]
+}
+
 export default defineConfig(({ mode }) => {
   // `--mode demo` (frontend/.env.demo): the static public demo, built into its own folder so it
   // never overwrites the production bundle that the backend serves.
   const demo = mode === 'demo'
   return {
-    plugins: [react(), demo ? demoSite() : withoutMockServiceWorker()],
+    plugins: [react(), themeBoot(), demo ? demoSite() : withoutMockServiceWorker()],
     // The demo's `/api/version` date (src/demo/handlers.ts); unused by normal builds.
     define: { __DEMO_BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)) },
     build: { outDir: demo ? 'dist-demo' : 'dist' },

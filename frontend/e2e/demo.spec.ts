@@ -45,6 +45,17 @@ async function expectAccessible(page: Page): Promise<void> {
   expect(results.violations.map(violation => `${violation.id}: ${violation.nodes.map(node => node.target.join(' ')).join(', ')}`)).toEqual([])
 }
 
+/** A message with its one placeholder filled, such as "Language: {language}". */
+function fill(template: string, value: string): string {
+  return template.replace(/\{\w+\}/, value)
+}
+
+/** Whether a CSS color is dark: below the midpoint in every channel. */
+function isDark(color: string): boolean {
+  const channels = color.match(/\d+(\.\d+)?/g)?.slice(0, 3).map(Number) ?? []
+  return channels.length === 3 && channels.every(channel => channel < 128)
+}
+
 async function enter(page: Page, path = '/', messages: Texts = en): Promise<void> {
   const response = await page.goto(path)
   if (response) expect(response.status()).toBe(200)
@@ -137,5 +148,93 @@ test('on a phone the menu covers the page and closes after choosing', async ({ p
   await nav.getByRole('link', { name: /^Backups/ }).click()
   await expect(nav).toBeHidden()
   await expect(page.getByRole('heading', { level: 1, name: 'Backups' })).toBeVisible()
+  await expectAccessible(page)
+
+  // The language and theme menus fit in the bar, next to the settings.
+  const bar = page.getByRole('banner')
+  const theme = bar.getByRole('button', { name: fill(en.shell.theme, en.shell.themes.auto) })
+  for (const button of [bar.getByRole('button', { name: fill(en.shell.language, 'English') }), theme,
+    bar.getByRole('button', { name: en.shell.settings })]) {
+    await expect(button).toBeInViewport({ ratio: 1 })
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await theme.click()
+  await expectAccessible(page)
+  await page.getByRole('menuitemradio', { name: en.shell.themes.dark }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
+test.describe('in a Spanish browser', () => {
+  test.use({ locale: 'es-ES' })
+
+  test('the demo is in English until Spanish is chosen, and the browser keeps the language and the theme', async ({ page }) => {
+    await enter(page)
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await page.getByRole('button', { name: fill(en.shell.language, 'English') }).click()
+    await page.getByRole('menuitemradio', { name: 'Español' }).click()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es')
+    await expect(page.getByRole('heading', { name: es.history.title })).toBeVisible()
+
+    // The system is light (playwright.demo.config.ts); the dark theme is chosen.
+    await page.getByRole('button', { name: fill(es.shell.theme, es.shell.themes.auto) }).click()
+    await expect(page.getByRole('menuitemradio', { name: es.shell.themes.auto })).toBeChecked()
+    await expectAccessible(page)
+    await page.getByRole('menuitemradio', { name: es.shell.themes.dark }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    const tile = page.getByRole('group', { name: /Media/ }).getByRole('button').first()
+    await expect(tile).toBeVisible()
+    const colors = await page.evaluate(() => ({
+      page: getComputedStyle(document.body).backgroundColor,
+      scheme: getComputedStyle(document.documentElement).colorScheme,
+    }))
+    expect(isDark(colors.page), colors.page).toBe(true)
+    expect(colors.scheme).toBe('dark')
+    const tileColor = await tile.evaluate(element => getComputedStyle(element).backgroundColor)
+    expect(isDark(tileColor), tileColor).toBe(true)
+    await expectAccessible(page)
+
+    await page.reload()
+    await expect(page.getByRole('dialog', { name: es.demo.welcome.title })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expectAccessible(page)
+  })
+})
+
+test('wide screens: the page fills the window, without scrolling sideways', async ({ page }) => {
+  for (const width of [1920, 2560, 3440]) {
+    await page.setViewportSize({ width, height: 1440 })
+    await enter(page, '/directories/1')
+    const treemap = page.getByRole('group', { name: 'Treemap of Media' })
+    await expect(treemap.getByRole('button').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: en.history.recent })).toBeVisible()
+    const layout = await page.evaluate(() => {
+      const box = (selector: string) => {
+        const rect = document.querySelector(selector)?.getBoundingClientRect()
+        return rect ? { left: rect.left, right: rect.right, width: rect.width } : null
+      }
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        menu: box('#directory-list'),
+        main: box('main'),
+        treemap: box('[role="group"][aria-label^="Treemap"]'),
+        table: box('[role="region"][aria-label^="Folders"]'),
+        charts: box('figure'),
+        scans: box('[role="region"][aria-labelledby="history-recent"]'),
+      }
+    })
+    expect(layout.scrollWidth, `${width}: horizontal scrolling`).toBeLessThanOrEqual(layout.clientWidth)
+    // The content takes everything right of the menu: no maximum width.
+    expect(layout.main?.left).toBeCloseTo(layout.menu?.right ?? -1, 0)
+    expect(layout.main?.right).toBeCloseTo(layout.clientWidth, 0)
+    // The treemap grows with the window, with its table beside it, and the latest scans beside the charts.
+    expect(layout.treemap?.width ?? 0).toBeGreaterThan(0.6 * (layout.main?.width ?? 0))
+    expect(layout.table?.left ?? 0).toBeGreaterThan(layout.treemap?.right ?? Infinity)
+    expect(layout.scans?.left ?? 0).toBeGreaterThan(layout.charts?.right ?? Infinity)
+  }
+  await page.getByRole('radio', { name: en.treemap.changes }).click()
+  await expect(page.getByRole('heading', { name: en.treemap.biggest })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0)
   await expectAccessible(page)
 })

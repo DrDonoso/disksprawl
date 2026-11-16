@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { ApiError, errorMessage, fieldMessage } from '../api/client'
 import { useSaveSettings, useSettings, useVersion } from '../api/hooks'
 import type { SettingsIn } from '../api/schema.gen'
-import { setLanguagePreference, storedPreference, useI18n, type LanguagePreference } from '../i18n'
+import { useI18n } from '../i18n'
 import { InfoTip } from './InfoTip'
 import { Notice } from './ui'
 import styles from './DirectoryForm.module.css'
@@ -15,14 +15,13 @@ const FIELDS = [
   { key: 'critical_percent', min: 2, max: 100 },
 ] as const
 
-/** Capacity sampling, history kept, the smallest folder stored, thresholds and the language. */
+/** Capacity sampling, history kept, the smallest folder stored and the thresholds. */
 export function GeneralSettings() {
   const { t } = useI18n()
   const settings = useSettings()
   const version = useVersion()
   const save = useSaveSettings()
   const [values, setValues] = useState<SettingsIn | null>(null)
-  const [language, setLanguage] = useState<LanguagePreference>(storedPreference)
   const [saved, setSaved] = useState(false)
   const id = useId()
 
@@ -64,22 +63,6 @@ export function GeneralSettings() {
     <div className={styles.actions}>
       <button type="submit" className="button" disabled={save.isPending}>{save.isPending ? t('common.saving') : t('common.save')}</button>
     </div>
-    <fieldset className={styles.section}>
-      <legend>{t('general.interface')}</legend>
-      <div className="field">
-        <label htmlFor={`${id}-language`}>{t('general.language')}</label>
-        <select id={`${id}-language`} value={language} onChange={event => {
-          const next = event.target.value as LanguagePreference
-          setLanguage(next)
-          setLanguagePreference(next)
-        }}>
-          <option value="auto">{t('general.languages.auto')}</option>
-          <option value="en">English</option>
-          <option value="es">Español</option>
-        </select>
-        <span className="field-hint">{t('general.languageHint')}</span>
-      </div>
-    </fieldset>
     {version.data && <p className="muted small">{t('general.version', { version: version.data.version })}</p>}
   </form>
 }

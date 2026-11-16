@@ -1,23 +1,4 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react'
-import type { Theme } from './colors'
-
-const QUERY = '(prefers-color-scheme: dark)'
-
-function subscribe(listener: () => void): () => void {
-  if (typeof window === 'undefined' || !window.matchMedia) return () => {}
-  const media = window.matchMedia(QUERY)
-  media.addEventListener('change', listener)
-  return () => media.removeEventListener('change', listener)
-}
-
-function current(): Theme {
-  return typeof window !== 'undefined' && window.matchMedia?.(QUERY).matches ? 'dark' : 'light'
-}
-
-/** The system's light or dark theme, followed live (the CSS uses the same media query). */
-export function useTheme(): Theme {
-  return useSyncExternalStore(subscribe, current, () => 'light')
-}
 
 let tick = 0
 const tickers = new Set<() => void>()

@@ -6,9 +6,6 @@ export const LANGUAGES = ['en', 'es'] as const
 /** Interface language: English (default and fallback) or Spanish. */
 export type Language = (typeof LANGUAGES)[number]
 
-/** Language setting: follow the browser, or a fixed language. */
-export type LanguagePreference = Language | 'auto'
-
 /** BCP 47 tag used by Intl and React Aria. */
 export type IntlLocale = 'en-GB' | 'es-ES'
 

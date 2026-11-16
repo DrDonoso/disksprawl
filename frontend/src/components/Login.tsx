@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { api, errorMessage, queryClient } from '../api/client'
 import { useI18n } from '../i18n'
+import { Preferences } from './Preferences'
 import { Notice } from './ui'
 import styles from './Login.module.css'
 
@@ -24,18 +25,21 @@ export function Login() {
       setBusy(false)
     }
   }
-  return <main className={styles.page} id="content">
-    <form className={`card ${styles.card}`} onSubmit={event => { event.preventDefault(); void submit() }}>
-      <img src="/icon.svg" alt="" width={48} height={48} />
-      <h1>{t('auth.title')}</h1>
-      <p className="muted">{t('auth.intro')}</p>
-      <div className="field">
-        <label htmlFor={id}>{t('auth.password')}</label>
-        <input id={id} type="password" autoComplete="current-password" value={password} required
-          onChange={event => setPassword(event.target.value)} />
-      </div>
-      {error !== null && <Notice error>{errorMessage(error)}</Notice>}
-      <button type="submit" className="button" disabled={busy || !password}>{busy ? t('auth.signingIn') : t('auth.signIn')}</button>
-    </form>
-  </main>
+  return <>
+    <header className={styles.header}><Preferences /></header>
+    <main className={styles.page} id="content">
+      <form className={`card ${styles.card}`} onSubmit={event => { event.preventDefault(); void submit() }}>
+        <img src="/icon.svg" alt="" width={48} height={48} />
+        <h1>{t('auth.title')}</h1>
+        <p className="muted">{t('auth.intro')}</p>
+        <div className="field">
+          <label htmlFor={id}>{t('auth.password')}</label>
+          <input id={id} type="password" autoComplete="current-password" value={password} required
+            onChange={event => setPassword(event.target.value)} />
+        </div>
+        {error !== null && <Notice error>{errorMessage(error)}</Notice>}
+        <button type="submit" className="button" disabled={busy || !password}>{busy ? t('auth.signingIn') : t('auth.signIn')}</button>
+      </form>
+    </main>
+  </>
 }

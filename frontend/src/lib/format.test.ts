@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { setLanguagePreference } from '../i18n'
+import { setLanguage } from '../i18n'
 import { formatBytes, formatDelta, formatDuration, formatOrdinal, formatPercent, formatRelative } from './format'
 import { NOW } from '../test/clock'
 
@@ -12,7 +12,7 @@ describe('formatting', () => {
     expect(formatBytes(null)).toBe('—')
     expect(formatDelta(5 * 2 ** 30)).toBe('+5\u00a0GiB')
     expect(formatDelta(-5 * 2 ** 20)).toBe('−5\u00a0MiB')
-    setLanguagePreference('es')
+    setLanguage('es')
     expect(formatBytes(1.5 * 2 ** 30)).toBe('1,5\u00a0GiB')
     expect(formatPercent(0.42)).toBe('42\u00a0%')
   })
@@ -27,7 +27,7 @@ describe('formatting', () => {
     expect(formatOrdinal(1)).toBe('1st')
     expect(formatOrdinal(2)).toBe('2nd')
     expect(formatOrdinal(13)).toBe('13th')
-    setLanguagePreference('es')
+    setLanguage('es')
     expect(formatRelative(new Date(NOW - 3 * 3600_000).toISOString(), NOW)).toBe('hace 3 horas')
     expect(formatRelative(new Date(NOW - 3 * 3600_000).toISOString(), NOW, { style: 'short' })).toBe('hace 3 h')
     expect(formatOrdinal(2)).toBe('2.º')

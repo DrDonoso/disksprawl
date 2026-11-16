@@ -19,10 +19,18 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-weight: 700;
   font-size: 1.05rem;
   color: var(--text);
   text-decoration: none;
+}
+
+/* On the narrowest phones the name gives way to the buttons. */
+.brand span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brand:hover {
@@ -30,6 +38,7 @@
 }
 
 .actions {
+  flex: none;
   margin-left: auto;
   display: flex;
   gap: 4px;
@@ -73,8 +82,6 @@
 }
 
 .main {
-  max-width: 1400px;
-  margin: 0 auto;
   padding: 20px 20px calc(32px + var(--demo-banner-height, 0px));
   outline: none;
 }

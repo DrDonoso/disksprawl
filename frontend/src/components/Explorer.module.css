@@ -1,8 +1,31 @@
 .explorer {
+  /* The treemap grows with the window's height; the table beside it on wide cards scrolls within it. */
+  --treemap-height: clamp(400px, 55vh, 960px);
+  container: explorer / inline-size;
   display: grid;
   gap: 12px;
   padding: 14px 16px 18px;
   min-width: 0;
+}
+
+.body,
+.column {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Wide cards: the treemap on the left; its table and the biggest changes on the right. */
+@container explorer (min-width: 1400px) {
+  .split {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 12px 20px;
+  }
+
+  .split .tableWrap {
+    max-height: var(--treemap-height);
+  }
 }
 
 .toolbar {
