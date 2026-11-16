@@ -93,3 +93,17 @@ test('settings explain every option, and the menu remembers being hidden', async
   await page.getByRole('button', { name: 'Show or hide the directories' }).click()
   await expect(page.getByRole('navigation', { name: 'Directories' })).toBeVisible()
 })
+
+test('on a very wide screen the page fills the window, without scrolling sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 3440, height: 1440 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  const layout = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+    main: document.querySelector('main')?.getBoundingClientRect().right,
+  }))
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+  expect(layout.main).toBeCloseTo(layout.clientWidth, 0)
+  await expectAccessible(page)
+})

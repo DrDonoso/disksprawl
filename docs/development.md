@@ -132,8 +132,8 @@ npm run e2e:demo
 - `npm run e2e` runs the Playwright tests of the real application in Chromium against
   `scripts/smoke_server.py`: a disposable server on port 7889 with a fresh database and a sample
   tree, serving the build in `frontend/dist` (run `npm run build` first). They add a directory,
-  scan it, explore its treemap and changes, and check the settings and the menu, with
-  accessibility (axe) checks. Install the browser once with
+  scan it, explore its treemap and changes, and check the settings, the menu and a 3440 px wide
+  window, with accessibility (axe) checks. Install the browser once with
   `npx playwright install --with-deps chromium`.
 - `npm run e2e:demo` tests the built demo, see [the demo](demo.md).
 

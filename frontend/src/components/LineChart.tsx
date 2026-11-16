@@ -9,7 +9,11 @@ export interface Point {
   label: string
 }
 
-const HEIGHT = 170
+/** A chart's height: 170 px, and taller on wide charts so that their lines keep some slope. */
+function chartHeight(width: number): number {
+  return Math.round(Math.min(280, Math.max(170, width / 6)))
+}
+
 const PAD = { top: 10, right: 12, bottom: 24, left: 64 }
 
 /** A small line chart in SVG: the value over time, with optional horizontal threshold lines. */
@@ -25,6 +29,7 @@ export function LineChart({ points, label, format, min, max, thresholds = [], co
   const { t } = useI18n()
   const [ref, size] = useElementSize<HTMLDivElement>()
   const width = Math.max(size.width, 200)
+  const height = chartHeight(width)
   if (points.length === 0) return <div ref={ref} className={styles.chart}><p className="muted">{t('history.empty')}</p></div>
   const times = points.map(point => point.time)
   const values = points.map(point => point.value)
@@ -37,7 +42,7 @@ export function LineChart({ points, label, format, min, max, thresholds = [], co
   const start = Math.min(...times)
   const end = Math.max(...times)
   const x = (time: number) => PAD.left + (end === start ? (width - PAD.left - PAD.right) / 2 : ((time - start) / (end - start)) * (width - PAD.left - PAD.right))
-  const y = (value: number) => PAD.top + (1 - (value - low) / (high - low)) * (HEIGHT - PAD.top - PAD.bottom)
+  const y = (value: number) => PAD.top + (1 - (value - low) / (high - low)) * (height - PAD.top - PAD.bottom)
   const line = points.map(point => `${x(point.time).toFixed(1)},${y(point.value).toFixed(1)}`).join(' ')
   const area = `${x(points[0].time).toFixed(1)},${y(low)} ${line} ${x(points[points.length - 1].time).toFixed(1)},${y(low)}`
   const ticks = [low, (low + high) / 2, high]
@@ -48,7 +53,7 @@ export function LineChart({ points, label, format, min, max, thresholds = [], co
     last: format(last.value), lastDate: formatDate(new Date(last.time).toISOString()),
   })
   return <div ref={ref} className={styles.chart}>
-    <svg width={width} height={HEIGHT} role="img" aria-label={description}>
+    <svg width={width} height={height} role="img" aria-label={description}>
       {ticks.map((tick, index) => <g key={index}>
         <line x1={PAD.left} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} className={styles.grid} />
         <text x={PAD.left - 6} y={y(tick) + 4} textAnchor="end" className={styles.axis}>{format(tick)}</text>
@@ -61,8 +66,8 @@ export function LineChart({ points, label, format, min, max, thresholds = [], co
       {points.length <= 120 && points.map((point, index) => <circle key={index} cx={x(point.time)} cy={y(point.value)} r={3} fill={color}>
         <title>{point.label}</title>
       </circle>)}
-      <text x={PAD.left} y={HEIGHT - 6} className={styles.axis}>{formatDate(new Date(start).toISOString())}</text>
-      <text x={width - PAD.right} y={HEIGHT - 6} textAnchor="end" className={styles.axis}>{formatDate(new Date(end).toISOString())}</text>
+      <text x={PAD.left} y={height - 6} className={styles.axis}>{formatDate(new Date(start).toISOString())}</text>
+      <text x={width - PAD.right} y={height - 6} textAnchor="end" className={styles.axis}>{formatDate(new Date(end).toISOString())}</text>
     </svg>
   </div>
 }

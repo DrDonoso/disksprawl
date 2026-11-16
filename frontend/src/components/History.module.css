@@ -1,8 +1,28 @@
 .history {
+  container: history / inline-size;
   display: grid;
   gap: 12px;
   padding: 14px 16px 18px;
   min-width: 0;
+}
+
+.body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Wide cards: the charts one above the other on the left, the latest scans on the right. */
+@container history (min-width: 1400px) {
+  .split {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+    gap: var(--gap) 20px;
+  }
+
+  .split .charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .head {

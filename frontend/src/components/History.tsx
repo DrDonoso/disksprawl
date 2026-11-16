@@ -52,45 +52,47 @@ export function History({ directoryId, settings }: { directoryId: number; settin
         </ToggleButton>)}
       </ToggleButtonGroup>
     </div>
-    <div className={styles.charts}>
-      <figure>
-        <figcaption>{t('history.size')}</figcaption>
-        <LineChart points={sizePoints} label={t('history.size')} format={value => formatBytes(value)} />
-      </figure>
-      <figure>
-        <figcaption>{t('history.volume')}</figcaption>
-        <LineChart points={volumePoints} label={t('history.volume')} min={0} max={100} color="var(--chart-volume)"
-          format={value => formatPercent(value / 100)}
-          thresholds={settings ? [
-            { value: settings.warn_percent, color: 'var(--warn-fill)' },
-            { value: settings.critical_percent, color: 'var(--danger-fill)' },
-          ] : []} />
-      </figure>
-    </div>
-    {recent.length > 0 && <div className={styles.tableWrap}>
-      <h3 id="history-recent">{t('history.recent')}</h3>
-      <div className={styles.scroll} role="region" tabIndex={0} aria-labelledby="history-recent">
-      <table>
-        <thead><tr>
-          <th scope="col">{t('history.columns.date')}</th>
-          <th scope="col">{t('history.columns.status')}</th>
-          <th scope="col">{t('history.columns.trigger')}</th>
-          <th scope="col">{t('history.columns.engine')}</th>
-          <th scope="col" className="number">{t('history.columns.duration')}</th>
-          <th scope="col" className="number">{t('history.columns.size')}</th>
-        </tr></thead>
-        <tbody>
-          {recent.map(scan => <tr key={scan.id}>
-            <td className="nowrap">{formatDateTime(scan.finished_at ?? scan.started_at ?? scan.queued_at)}</td>
-            <td><StatusCell scan={scan} /></td>
-            <td>{t(`history.triggers.${scan.trigger}`)}</td>
-            <td>{t(`engines.${scan.engine}.name`)}</td>
-            <td className="number">{formatDuration(scan.duration_seconds)}</td>
-            <td className="number">{scan.total_bytes === null ? '—' : formatBytes(scan.total_bytes)}</td>
-          </tr>)}
-        </tbody>
-      </table>
+    <div className={`${styles.body} ${recent.length > 0 ? styles.split : ''}`}>
+      <div className={styles.charts}>
+        <figure>
+          <figcaption>{t('history.size')}</figcaption>
+          <LineChart points={sizePoints} label={t('history.size')} format={value => formatBytes(value)} />
+        </figure>
+        <figure>
+          <figcaption>{t('history.volume')}</figcaption>
+          <LineChart points={volumePoints} label={t('history.volume')} min={0} max={100} color="var(--chart-volume)"
+            format={value => formatPercent(value / 100)}
+            thresholds={settings ? [
+              { value: settings.warn_percent, color: 'var(--warn-fill)' },
+              { value: settings.critical_percent, color: 'var(--danger-fill)' },
+            ] : []} />
+        </figure>
       </div>
-    </div>}
+      {recent.length > 0 && <div className={styles.tableWrap}>
+        <h3 id="history-recent">{t('history.recent')}</h3>
+        <div className={styles.scroll} role="region" tabIndex={0} aria-labelledby="history-recent">
+          <table>
+            <thead><tr>
+              <th scope="col">{t('history.columns.date')}</th>
+              <th scope="col">{t('history.columns.status')}</th>
+              <th scope="col">{t('history.columns.trigger')}</th>
+              <th scope="col">{t('history.columns.engine')}</th>
+              <th scope="col" className="number">{t('history.columns.duration')}</th>
+              <th scope="col" className="number">{t('history.columns.size')}</th>
+            </tr></thead>
+            <tbody>
+              {recent.map(scan => <tr key={scan.id}>
+                <td className="nowrap">{formatDateTime(scan.finished_at ?? scan.started_at ?? scan.queued_at)}</td>
+                <td><StatusCell scan={scan} /></td>
+                <td>{t(`history.triggers.${scan.trigger}`)}</td>
+                <td>{t(`engines.${scan.engine}.name`)}</td>
+                <td className="number">{formatDuration(scan.duration_seconds)}</td>
+                <td className="number">{scan.total_bytes === null ? '—' : formatBytes(scan.total_bytes)}</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>}
+    </div>
   </section>
 }

@@ -139,3 +139,41 @@ test('on a phone the menu covers the page and closes after choosing', async ({ p
   await expect(page.getByRole('heading', { level: 1, name: 'Backups' })).toBeVisible()
   await expectAccessible(page)
 })
+
+test('wide screens: the page fills the window, without scrolling sideways', async ({ page }) => {
+  for (const width of [1920, 2560, 3440]) {
+    await page.setViewportSize({ width, height: 1440 })
+    await enter(page, '/directories/1')
+    const treemap = page.getByRole('group', { name: 'Treemap of Media' })
+    await expect(treemap.getByRole('button').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: en.history.recent })).toBeVisible()
+    const layout = await page.evaluate(() => {
+      const box = (selector: string) => {
+        const rect = document.querySelector(selector)?.getBoundingClientRect()
+        return rect ? { left: rect.left, right: rect.right, width: rect.width } : null
+      }
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        menu: box('#directory-list'),
+        main: box('main'),
+        treemap: box('[role="group"][aria-label^="Treemap"]'),
+        table: box('[role="region"][aria-label^="Folders"]'),
+        charts: box('figure'),
+        scans: box('[role="region"][aria-labelledby="history-recent"]'),
+      }
+    })
+    expect(layout.scrollWidth, `${width}: horizontal scrolling`).toBeLessThanOrEqual(layout.clientWidth)
+    // The content takes everything right of the menu: no maximum width.
+    expect(layout.main?.left).toBeCloseTo(layout.menu?.right ?? -1, 0)
+    expect(layout.main?.right).toBeCloseTo(layout.clientWidth, 0)
+    // The treemap grows with the window, with its table beside it, and the latest scans beside the charts.
+    expect(layout.treemap?.width ?? 0).toBeGreaterThan(0.6 * (layout.main?.width ?? 0))
+    expect(layout.table?.left ?? 0).toBeGreaterThan(layout.treemap?.right ?? Infinity)
+    expect(layout.scans?.left ?? 0).toBeGreaterThan(layout.charts?.right ?? Infinity)
+  }
+  await page.getByRole('radio', { name: en.treemap.changes }).click()
+  await expect(page.getByRole('heading', { name: en.treemap.biggest })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0)
+  await expectAccessible(page)
+})

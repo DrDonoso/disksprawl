@@ -89,6 +89,8 @@ and exactly which folders grew or shrank between two scans. It only ever reads y
   folder, with warning and critical thresholds. Directories on the same volume are recognized.
 - **History** charts of each directory's size and of its volume's use over 30, 90 or 365 days,
   and the latest scans with their engine, duration and errors.
+- The whole width of the window, from a phone to an ultrawide screen: on wide screens the treemap
+  grows and its table and the latest scans move beside it.
 
 **Self-hosted and read-only**
 

@@ -78,6 +78,8 @@ export function Explorer({ summary }: { summary: DirectorySummaryOut }) {
     : tree.data?.size ?? 0
   const rows: (TreeChildOut | DiffChildOut)[] = view === 'changes' ? diff.data?.children ?? [] : tree.data?.children ?? []
   const latest = detailed[0]
+  // The table and the biggest changes: under the treemap, or beside it when the card is wide.
+  const side = rows.length > 0 || Boolean(canCompare && diff.data)
 
   return <section className={`card ${styles.explorer}`} aria-labelledby="explorer-title">
     <div className={styles.toolbar}>
@@ -121,59 +123,65 @@ export function Explorer({ summary }: { summary: DirectorySummaryOut }) {
       from: formatDateTime(diff.data.from_scan.finished_at),
       to: formatDateTime(diff.data.to_scan.finished_at),
     })}</p>}
-    {missing
-      ? <Notice>{t('treemap.missing')}</Notice>
-      : current.error ? <Notice error>{errorMessage(current.error)}</Notice>
-        : <Treemap items={items} label={t('treemap.label', { path: path || summary.directory.name })}
-          openHint={t('treemap.openHint')} empty={current.isPending ? t('shell.loading') : t('treemap.empty')} />}
-    {!canCompare && <p className="muted small">{t('treemap.noComparison')}</p>}
-    {rows.length > 0 && <div className={styles.tableWrap} role="region" tabIndex={0}
-      aria-label={t('treemap.tableCaption', { path: path || summary.directory.name })}>
-      <table>
-        <caption className="visually-hidden">{t('treemap.tableCaption', { path: path || summary.directory.name })}</caption>
-        <thead><tr>
-          <th scope="col">{t('treemap.columns.name')}</th>
-          <th scope="col" className="number">{view === 'changes' ? t('treemap.columns.after') : t('treemap.columns.size')}</th>
-          <th scope="col" className="number">{t('treemap.columns.share')}</th>
-          {(view === 'changes' || diffByName.size > 0) && <th scope="col" className="number">{t('treemap.columns.change')}</th>}
-        </tr></thead>
-        <tbody>
-          {rows.map(row => {
-            const size = 'size' in row ? row.size : Math.max(row.before ?? 0, row.after ?? 0)
-            const shown = 'size' in row ? row.size : row.after
-            const change = 'size' in row ? diffByName.get(row.name) : row
-            return <tr key={row.path}>
-              <td>{row.has_children
-                ? <button type="button" className={styles.rowLink} onClick={() => go({ path: row.path })}>
-                  <Icon name="folder" size={16} />{row.name}
-                </button>
-                : <span className={styles.rowName}><Icon name="folder" size={16} />{row.name}</span>}</td>
-              <td className="number">{shown === null ? '—' : formatBytes(shown)}</td>
-              <td className="number">{total ? formatPercent(size / total, undefined, 1) : '—'}</td>
-              {(view === 'changes' || diffByName.size > 0) && <td className="number">
-                {change ? <Delta before={change.before} after={change.after} /> : '—'}
-              </td>}
-            </tr>
-          })}
-        </tbody>
-      </table>
-    </div>}
-    {canCompare && diff.data && <div className={styles.biggest}>
-      <h3>{t('treemap.biggest')}</h3>
-      {diff.data.biggest.length === 0
-        ? <p className="muted">{t('treemap.biggestEmpty')}</p>
-        : <ol>
-          {diff.data.biggest.map(change => {
-            const [sizes] = changeLines(change.before, change.after)
-            return <li key={change.path}>
-              <button type="button" className={styles.rowLink} onClick={() => go({ path: parentPath(change.path) })}>
-                {change.path}
-              </button>
-              <span className="muted small"> {sizes}</span>{' '}
-              <strong><Delta before={change.before} after={change.after} /></strong>
-            </li>
-          })}
-        </ol>}
-    </div>}
+    <div className={`${styles.body} ${side ? styles.split : ''}`}>
+      <div className={styles.column}>
+        {missing
+          ? <Notice>{t('treemap.missing')}</Notice>
+          : current.error ? <Notice error>{errorMessage(current.error)}</Notice>
+            : <Treemap items={items} label={t('treemap.label', { path: path || summary.directory.name })}
+              openHint={t('treemap.openHint')} empty={current.isPending ? t('shell.loading') : t('treemap.empty')} />}
+        {!canCompare && <p className="muted small">{t('treemap.noComparison')}</p>}
+      </div>
+      {side && <div className={styles.column}>
+        {rows.length > 0 && <div className={styles.tableWrap} role="region" tabIndex={0}
+          aria-label={t('treemap.tableCaption', { path: path || summary.directory.name })}>
+          <table>
+            <caption className="visually-hidden">{t('treemap.tableCaption', { path: path || summary.directory.name })}</caption>
+            <thead><tr>
+              <th scope="col">{t('treemap.columns.name')}</th>
+              <th scope="col" className="number">{view === 'changes' ? t('treemap.columns.after') : t('treemap.columns.size')}</th>
+              <th scope="col" className="number">{t('treemap.columns.share')}</th>
+              {(view === 'changes' || diffByName.size > 0) && <th scope="col" className="number">{t('treemap.columns.change')}</th>}
+            </tr></thead>
+            <tbody>
+              {rows.map(row => {
+                const size = 'size' in row ? row.size : Math.max(row.before ?? 0, row.after ?? 0)
+                const shown = 'size' in row ? row.size : row.after
+                const change = 'size' in row ? diffByName.get(row.name) : row
+                return <tr key={row.path}>
+                  <td>{row.has_children
+                    ? <button type="button" className={styles.rowLink} onClick={() => go({ path: row.path })}>
+                      <Icon name="folder" size={16} />{row.name}
+                    </button>
+                    : <span className={styles.rowName}><Icon name="folder" size={16} />{row.name}</span>}</td>
+                  <td className="number">{shown === null ? '—' : formatBytes(shown)}</td>
+                  <td className="number">{total ? formatPercent(size / total, undefined, 1) : '—'}</td>
+                  {(view === 'changes' || diffByName.size > 0) && <td className="number">
+                    {change ? <Delta before={change.before} after={change.after} /> : '—'}
+                  </td>}
+                </tr>
+              })}
+            </tbody>
+          </table>
+        </div>}
+        {canCompare && diff.data && <div className={styles.biggest}>
+          <h3>{t('treemap.biggest')}</h3>
+          {diff.data.biggest.length === 0
+            ? <p className="muted">{t('treemap.biggestEmpty')}</p>
+            : <ol>
+              {diff.data.biggest.map(change => {
+                const [sizes] = changeLines(change.before, change.after)
+                return <li key={change.path}>
+                  <button type="button" className={styles.rowLink} onClick={() => go({ path: parentPath(change.path) })}>
+                    {change.path}
+                  </button>
+                  <span className="muted small"> {sizes}</span>{' '}
+                  <strong><Delta before={change.before} after={change.after} /></strong>
+                </li>
+              })}
+            </ol>}
+        </div>}
+      </div>}
+    </div>
   </section>
 }
