@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { DirectoryForm } from './DirectoryForm'
+import { Login } from './Login'
 import { Shell } from './Shell'
 import { renderWithProviders, resetApi, server } from '../test/render'
 
@@ -101,5 +102,34 @@ describe('the directory menu', () => {
     renderWithProviders(<Shell />)
     expect(await screen.findByText('No directories yet.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add a directory' })).toBeInTheDocument()
+  })
+})
+
+describe('the top bar', () => {
+  test('its menus change the language and the theme, and this browser keeps them', async () => {
+    const user = userEvent.setup()
+    // A Spanish browser gets English until Spanish is chosen.
+    Object.defineProperty(navigator, 'languages', { configurable: true, get: () => ['es-ES', 'es'] })
+    renderWithProviders(<Shell />)
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Language: English' }))
+    expect(screen.getByRole('menuitemradio', { name: 'English' })).toHaveAttribute('aria-checked', 'true')
+    await user.click(screen.getByRole('menuitemradio', { name: 'Español' }))
+    expect(await screen.findByRole('button', { name: 'Ajustes' })).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('es')
+    expect(localStorage.getItem('disksprawl_language')).toBe('es')
+
+    await user.click(screen.getByRole('button', { name: 'Tema: Automático (sistema)' }))
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual(['Claro', 'Oscuro', 'Automático (sistema)'])
+    await user.click(screen.getByRole('menuitemradio', { name: 'Oscuro' }))
+    expect(screen.getByRole('button', { name: 'Tema: Oscuro' })).toBeInTheDocument()
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(localStorage.getItem('disksprawl_theme')).toBe('dark')
+  })
+
+  test('the sign-in page has the same menus', () => {
+    renderWithProviders(<Login />)
+    expect(screen.getByRole('button', { name: 'Language: English' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Theme: Automatic (system)' })).toBeInTheDocument()
   })
 })

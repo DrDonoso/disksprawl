@@ -96,7 +96,9 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 ```
 
 and `Strict-Transport-Security` when `AUTH_COOKIE_SECURE=true`. The web interface loads nothing
-from other sites: no fonts, scripts or analytics. Request bodies over 64 KiB are refused.
+from other sites: no fonts, scripts or analytics. It has no inline scripts either: the script that
+applies the theme before the page is drawn is a file of the bundle, like the rest. Request bodies
+over 64 KiB are refused.
 
 ## Reverse proxies
 

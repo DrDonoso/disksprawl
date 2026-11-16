@@ -1,0 +1,67 @@
+.trigger {
+  display: inline-flex;
+}
+
+.trigger [aria-expanded='true'] {
+  background: var(--surface-2);
+}
+
+/* Focus moves back to the button when the menu closes: outline it only after a key, as React Aria
+   tells (data-focus-visible), not after a click. */
+.trigger button:focus-visible:not([data-focus-visible]) {
+  outline: none;
+}
+
+.popover {
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+  outline: none;
+}
+
+.menu {
+  display: grid;
+  gap: 2px;
+  outline: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  outline: none;
+}
+
+.item[data-focused] {
+  background: var(--surface-2);
+}
+
+.item:focus-visible {
+  outline: none;
+}
+
+.item[data-focus-visible] {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.item[data-selected] {
+  font-weight: 600;
+}
+
+.check {
+  margin-left: auto;
+  color: var(--primary);
+}
+
+.item:not([data-selected]) .check {
+  visibility: hidden;
+}

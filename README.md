@@ -100,7 +100,8 @@ and exactly which folders grew or shrank between two scans. It only ever reads y
 - An optional single password, signed HttpOnly cookies, throttled sign-in, cross-site request
   forgery and DNS rebinding protection, and a strict Content Security Policy. See the
   [security model](docs/security-model.md).
-- English and Spanish, and light and dark themes that follow your browser and system.
+- English (the default) and Spanish, and a light, dark or automatic theme that follows the
+  system: both are chosen from the top bar and kept in each browser.
 
 ## Screenshots
 
@@ -235,7 +236,8 @@ describes each one.
 
 The schedules and scan methods of each directory, the capacity measurement interval, how many
 scans keep their folders (30 per directory), the smallest folder stored (1 MiB), the volume
-thresholds (80 % and 90 %) and the language are set in the interface, under **⚙ Settings**.
+thresholds (80 % and 90 %) are set in the interface, under **⚙ Settings**. The language and the
+theme are chosen in the top bar, next to **⚙**, and each browser keeps its own.
 
 ## Scan engines
 

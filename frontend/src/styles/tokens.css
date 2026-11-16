@@ -1,6 +1,9 @@
-/* Design tokens. Light by default, dark when the system asks for it: there is no theme switch. */
+/*
+ * Design tokens: light, or dark under <html data-theme="dark">. src/lib/theme-boot.js sets the
+ * attribute before the first paint, from the theme chosen in this browser or the system's.
+ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
@@ -37,32 +40,31 @@
   --gap: 16px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171c;
-    --surface: #1c2027;
-    --surface-2: #252a33;
-    --border: #333a45;
-    --text: #e8eaee;
-    --text-muted: #a4acb9;
-    --primary: #7aa2ff;
-    --primary-hover: #9ab8ff;
-    --primary-contrast: #0c1530;
-    --focus: #9ab8ff;
-    --ok: #6fd18f;
-    --warn: #f0c050;
-    --danger: #ff8a7d;
-    --ok-fill: #3fae63;
-    --warn-fill: #e0a91f;
-    --danger-fill: #e2574a;
-    --track: #2d333d;
-    --notice-bg: #2c2615;
-    --notice-border: #5c4a1a;
-    --error-bg: #3a1d1b;
-    --error-border: #6e2f2a;
-    --chart-line: #7aa2ff;
-    --chart-area: rgba(122, 162, 255, 0.16);
-    --chart-volume: #f0c050;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  }
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #14171c;
+  --surface: #1c2027;
+  --surface-2: #252a33;
+  --border: #333a45;
+  --text: #e8eaee;
+  --text-muted: #a4acb9;
+  --primary: #7aa2ff;
+  --primary-hover: #9ab8ff;
+  --primary-contrast: #0c1530;
+  --focus: #9ab8ff;
+  --ok: #6fd18f;
+  --warn: #f0c050;
+  --danger: #ff8a7d;
+  --ok-fill: #3fae63;
+  --warn-fill: #e0a91f;
+  --danger-fill: #e2574a;
+  --track: #2d333d;
+  --notice-bg: #2c2615;
+  --notice-border: #5c4a1a;
+  --error-bg: #3a1d1b;
+  --error-border: #6e2f2a;
+  --chart-line: #7aa2ff;
+  --chart-area: rgba(122, 162, 255, 0.16);
+  --chart-volume: #f0c050;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }

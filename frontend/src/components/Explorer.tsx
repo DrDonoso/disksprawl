@@ -7,7 +7,7 @@ import type { DiffChildOut, DirectorySummaryOut, TreeChildOut } from '../api/sch
 import { useI18n } from '../i18n'
 import { changeBlocks, changeLines, parentPath, sizeBlocks, type Block } from '../lib/blocks'
 import { formatBytes, formatDateTime, formatDelta, formatPercent } from '../lib/format'
-import { useTheme } from '../lib/hooks'
+import { useTheme } from '../lib/theme'
 import { Icon } from './Icon'
 import { Treemap, type TreemapItem } from './Treemap'
 import { Notice } from './ui'

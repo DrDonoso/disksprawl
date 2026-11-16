@@ -63,7 +63,7 @@ In `frontend/` (no backend needed):
 | `npm run dev:demo` | Vite development server in demo mode. |
 | `npm run build:demo` | Type-checks and builds the demo into `dist-demo/` (never touches `dist/`). |
 | `npm run preview:demo` | Serves `dist-demo/` with the demo's security headers. |
-| `npm run e2e:demo` | Playwright tests of the **built** demo on port 4183 (`DEMO_E2E_PORT`): the welcome dialog, banner and security headers, every screen in English and Spanish with accessibility (axe) checks, a scan, adding, editing and deleting a directory, the phone layout and windows 1920, 2560 and 3440 px wide. They fail on any request the demo does not answer and on any console error. Run `npm run build:demo` first. |
+| `npm run e2e:demo` | Playwright tests of the **built** demo on port 4183 (`DEMO_E2E_PORT`): the welcome dialog, banner and security headers, every screen in English and Spanish with accessibility (axe) checks, a scan, adding, editing and deleting a directory, the language and theme menus with a browser in Spanish, the phone layout and windows 1920, 2560 and 3440 px wide. They fail on any request the demo does not answer and on any console error. Run `npm run build:demo` first. |
 | `npx vitest run src/demo` | Unit tests of the demo's API and data. |
 
 `DEMO_E2E_BASE_URL=https://demo.disksprawl.drdonoso.com npm run e2e:demo` checks the deployed

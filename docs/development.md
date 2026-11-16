@@ -132,9 +132,9 @@ npm run e2e:demo
 - `npm run e2e` runs the Playwright tests of the real application in Chromium against
   `scripts/smoke_server.py`: a disposable server on port 7889 with a fresh database and a sample
   tree, serving the build in `frontend/dist` (run `npm run build` first). They add a directory,
-  scan it, explore its treemap and changes, and check the settings, the menu and a 3440 px wide
-  window, with accessibility (axe) checks. Install the browser once with
-  `npx playwright install --with-deps chromium`.
+  scan it, explore its treemap and changes, and check the settings, the menu, the language and
+  theme menus (with a browser in Spanish) and a 3440 px wide window, with accessibility (axe)
+  checks. Install the browser once with `npx playwright install --with-deps chromium`.
 - `npm run e2e:demo` tests the built demo, see [the demo](demo.md).
 
 ## API contract and generated types
@@ -166,10 +166,11 @@ Review generated migrations: SQLite needs batch operations for most column chang
 
 ## Translations
 
-The interface is in English and Spanish. `frontend/src/i18n/locales/en.ts` is the source of every
-text and `es.ts` must have the same keys, which the type checker enforces. Plurals use `one` and
-`other` keys, so never name a group of texts `other`. Texts are plain: no HTML except the few
-`<code>` chunks rendered by the `rich` helper.
+The interface is in English and Spanish: English until Spanish is chosen in the top bar, whatever
+the browser's language, and the browser keeps the choice. `frontend/src/i18n/locales/en.ts` is the
+source of every text and `es.ts` must have the same keys, which the type checker enforces. Plurals
+use `one` and `other` keys, so never name a group of texts `other`. Texts are plain: no HTML except
+the few `<code>` chunks rendered by the `rich` helper.
 
 ## The demo
 

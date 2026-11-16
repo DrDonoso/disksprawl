@@ -82,6 +82,8 @@ test('settings explain every option, and the menu remembers being hidden', async
   await expectAccessible(page)
   await dialog.getByRole('tab', { name: 'General' }).click()
   await expect(dialog.getByLabel('Detailed scans kept per directory', { exact: true })).toHaveValue('30')
+  // The language is chosen in the top bar only.
+  await expect(dialog.getByLabel('Language', { exact: true })).toHaveCount(0)
   await expectAccessible(page)
   await dialog.getByRole('button', { name: 'Close' }).click()
 
@@ -92,6 +94,39 @@ test('settings explain every option, and the menu remembers being hidden', async
   await expect(page.getByRole('navigation', { name: 'Directories' })).toBeHidden()
   await page.getByRole('button', { name: 'Show or hide the directories' }).click()
   await expect(page.getByRole('navigation', { name: 'Directories' })).toBeVisible()
+})
+
+test.describe('in a Spanish browser', () => {
+  test.use({ locale: 'es-ES' })
+
+  test('the interface is in English until Spanish is chosen; the browser keeps the language and the theme', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible()
+    await page.getByRole('button', { name: 'Language: English' }).click()
+    await page.getByRole('menuitemradio', { name: 'Español' }).click()
+    await expect(page.getByRole('button', { name: 'Ajustes' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es')
+    await page.getByRole('button', { name: 'Tema: Automático (sistema)' }).click()
+    await page.getByRole('menuitemradio', { name: 'Oscuro' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expectAccessible(page)
+
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Tema: Oscuro' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es')
+
+    // The theme is in place before the application's code runs: here, without it at all.
+    await page.route(/\/assets\/index-[\w-]+\.js$/, route => route.abort())
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    expect(await page.evaluate(() => ({
+      background: getComputedStyle(document.body).backgroundColor,
+      scheme: getComputedStyle(document.documentElement).colorScheme,
+      browserColor: document.querySelector('meta[name="theme-color"][data-theme="dark"]')?.getAttribute('media'),
+    }))).toEqual({ background: 'rgb(20, 23, 28)', scheme: 'dark', browserColor: 'all' })
+    await expect(page.getByRole('button', { name: 'Ajustes' })).toHaveCount(0)
+  })
 })
 
 test('on a very wide screen the page fills the window, without scrolling sideways', async ({ page }) => {

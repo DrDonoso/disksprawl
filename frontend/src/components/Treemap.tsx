@@ -1,7 +1,8 @@
 import { useMemo, type ReactNode } from 'react'
-import { useTheme, useElementSize } from '../lib/hooks'
+import { useElementSize } from '../lib/hooks'
 import { squarify } from '../lib/squarify'
 import { tileText } from '../lib/colors'
+import { useTheme } from '../lib/theme'
 import styles from './Treemap.module.css'
 
 export interface TreemapItem {

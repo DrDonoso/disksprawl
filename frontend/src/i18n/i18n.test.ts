@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { LANGUAGE_STORAGE_KEY, getLanguage, resetLanguage, setLanguage } from '.'
 import { en } from './locales/en'
 import { es } from './locales/es'
 
@@ -32,5 +33,27 @@ describe('translations', () => {
       expect(placeholders(translated), key).toEqual(placeholders(text))
       expect(tags(translated), key).toEqual(tags(text))
     }
+  })
+})
+
+describe('the language', () => {
+  test('is English until another one is chosen, whatever the browser\'s, and the choice is kept in this browser', () => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, get: () => ['es-ES', 'es'] })
+    Object.defineProperty(navigator, 'language', { configurable: true, get: () => 'es-ES' })
+    expect(resetLanguage()).toBe('en')
+    for (const stored of ['auto', 'fr', '']) {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, stored)
+      expect(resetLanguage(), stored).toBe('en')
+    }
+
+    setLanguage('es')
+    expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('es')
+    expect(getLanguage()).toBe('es')
+    expect(resetLanguage()).toBe('es')
+
+    // Another tab chose English.
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, 'en')
+    window.dispatchEvent(new StorageEvent('storage', { key: LANGUAGE_STORAGE_KEY, newValue: 'en' }))
+    expect(getLanguage()).toBe('en')
   })
 })
