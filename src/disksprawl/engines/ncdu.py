@@ -2,7 +2,8 @@
 
 With one thread ncdu writes the export while it scans, so the scan has live counters. With more
 threads it builds the export in memory and writes it at the end; its one-line progress (`-1`) on a
-pseudo-terminal then gives the files read so far and the folders being read.
+pseudo-terminal then gives the files and folders read so far, in one counter, and the folders being
+read.
 """
 
 import re
@@ -111,7 +112,12 @@ def parse_ncdu(
 
 
 class TerminalProgress:
-    """Parses ncdu's one-line progress UI (`-1`), read from a pseudo-terminal."""
+    """Parses ncdu's one-line progress UI (`-1`), read from a pseudo-terminal: one counter of files
+    and folders together (shown as the files), the bytes, and the folder each thread reads.
+
+    When the walk ends, ncdu writes its export and draws that progress counting from 0 again: the
+    walk's counters are kept, and the scan is finishing.
+    """
 
     def __init__(self, root: str, progress: Progress):
         self.root = root
@@ -119,14 +125,22 @@ class TerminalProgress:
         self.pending = ""
         # The folder of the first thread after each counter line is shown as the current one.
         self.first_thread = False
+        self.walked = False
 
     def feed(self, text: str) -> None:
         self.pending += ANSI.sub("", text)
         *lines, self.pending = re.split(r"\r\n|\n|\r", self.pending)
         for line in lines:
+            if self.walked:
+                break
             match = PROGRESS_LINE.match(line)
             if match:
-                self.progress.files = int(match[1])
+                items = int(match[1])
+                if items < (self.progress.files or 0):
+                    self.walked = True
+                    self.progress.phase = "finishing"
+                    break
+                self.progress.files = items
                 self.progress.bytes = int(float(match[2]) * UNITS.get(match[3], 1))
                 self.first_thread = True
                 continue

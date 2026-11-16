@@ -68,6 +68,10 @@ def test_ncdu_terminal_progress() -> None:
     assert progress.files == 3748
     assert progress.bytes == int(1.2 * 2**30)
     assert progress.current == "a b/c"
+    # Then it writes its export, counting from 0 again: the walk is over and keeps its counters.
+    terminal.feed("\x1b[1F\x1b[2K120 files /  20.0 MiB\r\n  #1: /srv/tree/z\r\n5000 files /   1.3 GiB\r\n")
+    assert (progress.phase, progress.files, progress.current) == ("finishing", 3748, "a b/c")
+    assert progress.bytes == int(1.2 * 2**30)
 
 
 def test_gdu_export_counts_like_du() -> None:
