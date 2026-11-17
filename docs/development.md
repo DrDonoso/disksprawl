@@ -10,6 +10,7 @@
 - [API contract and generated types](#api-contract-and-generated-types)
 - [Database migrations](#database-migrations)
 - [Translations](#translations)
+- [What's new notes](#whats-new-notes)
 - [The demo](#the-demo)
 - [Continuous integration](#continuous-integration)
 - [Supply chain](#supply-chain)
@@ -172,6 +173,24 @@ source of every text and `es.ts` must have the same keys, which the type checker
 use `one` and `other` keys, so never name a group of texts `other`. Texts are plain: no HTML except
 the few `<code>` chunks rendered by the `rich` helper.
 
+## What's new notes
+
+Changes people will notice come with a note in `frontend/src/whatsNew/notes/`, one JSON file named
+`YYYY-MM-DD-slug.json`, shown in the top bar's bell dialog until each person reads it:
+
+```json
+{
+  "kind": "new",
+  "en": { "title": "A short title", "body": "One line saying what changed and why it helps." },
+  "es": { "title": "Un título corto", "body": "Una línea que dice qué cambió y para qué sirve." }
+}
+```
+
+`kind` is `new`, `improved` or `fixed`; titles have at most 70 characters and bodies 300, on one
+line. The file name is the note's permanent id: never rename or delete a released note. The server
+stores which ids have been read (`GET /api/whats-new`, `POST /api/whats-new/seen`); a new install
+marks everything read without showing it.
+
 ## The demo
 
 The static demo shares the whole interface with the application and answers the API in the
@@ -215,7 +234,9 @@ add dependencies with known high-severity vulnerabilities.
 changes more than documentation. It runs the whole CI, then builds the image for `linux/amd64` and
 `linux/arm64` and pushes it to Docker Hub as `drdonoso/disksprawl:latest` and as a CalVer tag: the
 date (`20261115`), with a suffix for further releases that day (`20261115.02`). Finally it creates
-a GitHub release with that tag and notes generated from the merged pull requests.
+a GitHub release with that tag. Its notes start with the "What's new" notes added since the
+previous release (`scripts/release_notes.py`), followed by the generated list of merged pull
+requests.
 
 It needs two repository secrets: `DOCKER_USERNAME` and `DOCKER_PASSWORD`, a Docker Hub access
 token with permission to push to the repository. Forks build and test, but never publish.

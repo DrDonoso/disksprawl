@@ -1,9 +1,13 @@
 """Request and response models: the API contract (exported to OpenAPI, typed in the frontend)."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
+# A "What's new" note's id: YYYY-MM-DD-slug, the file name in frontend/src/whatsNew/notes/.
+NOTE_ID_PATTERN = r"^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$"
+MAX_SEEN_NOTES = 1000
 
 Engine = Literal["native", "du", "ncdu", "gdu"]
 Pace = Literal["max", "balanced", "gentle"]
@@ -24,6 +28,17 @@ class Contract(BaseModel):
 
 class Input(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class WhatsNewOut(Contract):
+    # Ids of the "What's new" notes already read; None while nothing is recorded (a new install).
+    seen: list[str] | None
+
+
+class WhatsNewSeenIn(Input):
+    ids: list[Annotated[str, StringConstraints(max_length=80, pattern=NOTE_ID_PATTERN)]] = Field(
+        min_length=1, max_length=500
+    )
 
 
 class ScanOptions(Contract):

@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useSearchParams } from 'react-router'
 import { api, queryClient } from '../api/client'
 import { useAuthStatus, useDirectories } from '../api/hooks'
 import { useI18n } from '../i18n'
+import { WhatsNew } from '../whatsNew/WhatsNew'
 import { Icon } from './Icon'
 import { Preferences } from './Preferences'
 import { SettingsDialog, type SettingsTarget } from './SettingsDialog'
@@ -95,6 +96,7 @@ export function Shell({ banner }: { banner?: ReactNode }) {
       </Link>
       <div className={styles.actions}>
         <Preferences />
+        <WhatsNew />
         <button type="button" className="icon-button" aria-label={t('shell.settings')} title={t('shell.settings')}
           onClick={() => openSettings('directories')}>
           <Icon name="settings" />

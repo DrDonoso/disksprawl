@@ -1,0 +1,11 @@
+{
+  "kind": "new",
+  "en": {
+    "title": "Now we tell you what's new",
+    "body": "After an update, a window shows what changed since your last visit. The bell in the top bar keeps every note."
+  },
+  "es": {
+    "title": "Ahora te contamos las novedades",
+    "body": "Tras una actualización, una ventana muestra lo que ha cambiado desde tu última visita. La campana de la barra superior guarda todas las notas."
+  }
+}

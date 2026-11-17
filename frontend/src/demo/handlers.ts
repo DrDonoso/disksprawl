@@ -4,7 +4,7 @@
  * validation, the error format). A request no handler answers gets a 501 and a console error.
  */
 import { http, HttpResponse, type HttpHandler, type JsonBodyType, type PathParams } from 'msw'
-import type { DirectoryIn, SettingsIn } from '../api/schema.gen'
+import type { DirectoryIn, SettingsIn, WhatsNewSeenIn } from '../api/schema.gen'
 import { DemoError, DemoStore } from './store'
 
 /** Logged for an /api request that no handler answers (the e2e tests watch for it). */
@@ -134,6 +134,8 @@ export const handlers: HttpHandler[] = [
   http.post('/api/scans/:scanId/cancel', route(({ params }) => store.cancel(id(params, 'scanId')))),
   http.get('/api/queue', route(() => ({ items: store.queue() }))),
   http.get('/api/settings', route(() => store.settingsOut())),
+  http.get('/api/whats-new', route(() => store.whatsNew())),
+  http.post('/api/whats-new/seen', route(async ({ request }) => store.markWhatsNewSeen(await body<WhatsNewSeenIn>(request)))),
   http.put('/api/settings', route(async ({ request }) => store.saveSettings(await body<SettingsIn>(request)))),
   unhandledHandler,
 ]

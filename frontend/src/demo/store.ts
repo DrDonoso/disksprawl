@@ -6,13 +6,16 @@
 import { Cron } from 'croner'
 import type {
   BrowseOut, CapacityHistoryOut, CapacityOut, CronPreviewOut, DiffChangeOut, DiffOut, DirectoryIn, DirectoryOut, DirectorySummaryOut,
-  EngineOut, ProgressOut, ScanOut, SettingsIn, SettingsOut, TreeOut,
+  EngineOut, ProgressOut, ScanOut, SettingsIn, SettingsOut, TreeOut, WhatsNewOut, WhatsNewSeenIn,
 } from '../api/schema.gen'
 import {
   DAY, OTHER_FOLDERS, VOLUMES, allFolders, backupsModel, documentsModel, genericModel, leafSize, mediaModel, photosModel,
   snapshot, type Entry, type Model,
 } from './model'
 import { random } from './random'
+
+/** A what's new note's id (NoteId of the API). */
+const NOTE_ID = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/
 
 export class DemoError extends Error {
   constructor(public code: string, public status = 422, public fields?: Readonly<Record<string, string>>) {
@@ -90,6 +93,7 @@ export class DemoStore {
   private nextScanId = 1
   private nextDirectoryId = 1
   private changes = 0
+  private whatsNewSeen: string[] | null = null
   settings: Omit<SettingsOut, 'timezone'> = {
     capacity_interval_minutes: 15, keep_scans: KEEP_SCANS_DEFAULT, min_entry_mib: 1, warn_percent: 80, critical_percent: 90,
   }
@@ -628,6 +632,30 @@ export class DemoStore {
     if (body.critical_percent <= body.warn_percent) throw new DemoError('thresholds_out_of_order', 422, { critical_percent: 'thresholds_out_of_order' })
     this.settings = { ...body }
     return this.settingsOut()
+  }
+
+  /** The notes read so far; none recorded at first, so the demo opens with nothing to catch up on. */
+  whatsNew(): WhatsNewOut {
+    return { seen: this.whatsNewSeen && [...this.whatsNewSeen] }
+  }
+
+  /** Adds notes to the read ones (sorted, the newest 1000 kept), checked like the API. */
+  markWhatsNewSeen(body: WhatsNewSeenIn): WhatsNewOut {
+    const ids = (body as { ids?: unknown }).ids
+    const extra = Object.keys(body).filter(key => key !== 'ids')
+    if (extra.length) throw new DemoError('invalid_request', 422, Object.fromEntries(extra.map(key => [key, 'extra_forbidden'])))
+    const fail = (type: string): never => { throw new DemoError('invalid_request', 422, { ids: type }) }
+    if (ids === undefined) fail('missing')
+    if (!Array.isArray(ids)) fail('list_type')
+    const list = ids as unknown[]
+    if (list.length < 1) fail('too_short')
+    if (list.length > 500) fail('too_long')
+    if (list.some(id => typeof id !== 'string')) fail('string_type')
+    const values = list as string[]
+    if (values.some(id => id.length > 80)) fail('string_too_long')
+    if (values.some(id => !NOTE_ID.test(id))) fail('string_pattern_mismatch')
+    this.whatsNewSeen = [...new Set([...(this.whatsNewSeen ?? []), ...values])].toSorted().slice(-1000)
+    return this.whatsNew()
   }
 
   settingsOut(): SettingsOut {

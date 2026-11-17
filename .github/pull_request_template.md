@@ -38,6 +38,7 @@ Report security vulnerabilities privately (see SECURITY.md), never in a pull req
 - [ ] Documentation is updated (README, `docs/`, `.env.example`).
 - [ ] Schema changes include a new Alembic migration with a downgrade.
 - [ ] No personal folder names, host names, addresses or secrets in code, fixtures, logs or screenshots.
+- [ ] Changes people will notice come with a What's new note (`frontend/src/whatsNew/notes`).
 - [ ] Interface changes include screenshots with synthetic data.
 
 ## Screenshots
