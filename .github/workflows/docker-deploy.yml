@@ -84,4 +84,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.value }}
-        run: gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes
+        run: |
+          notes="$RUNNER_TEMP/whats-new.md"
+          : > "$notes"
+          previous=$(git describe --tags --abbrev=0 "$GITHUB_SHA" 2>/dev/null || true)
+          if [ -n "$previous" ]; then
+            python3 scripts/release_notes.py "$previous" "$GITHUB_SHA" > "$notes" \
+              || { echo "::warning::Could not build the What's new notes"; : > "$notes"; }
+          fi
+          gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" \
+            --notes-file "$notes" --generate-notes

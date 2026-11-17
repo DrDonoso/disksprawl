@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from .db import Setting
+from .schemas import MAX_SEEN_NOTES
 
 DEFAULTS: dict[str, int] = {
     # Minutes between measurements of each volume's capacity.
@@ -45,3 +46,27 @@ def save(db: Session, values: dict[str, int]) -> dict[str, int]:
             row.value = value
     db.flush()
     return load(db)
+
+
+# "What's new" notes already read: one list for the whole install, in its own key (not in DEFAULTS).
+SEEN_NOTES_KEY = "whats_new_seen"
+
+
+def load_seen_notes(db: Session) -> list[str] | None:
+    """The ids read so far; None when nothing is recorded (a new install: no news to catch up on)."""
+    row = db.get(Setting, SEEN_NOTES_KEY)
+    if row is None or not isinstance(row.value, list):
+        return None
+    return sorted(item for item in row.value if isinstance(item, str))
+
+
+def mark_notes_seen(db: Session, ids: list[str]) -> list[str]:
+    """Adds notes to the read ones: sorted, the newest MAX_SEEN_NOTES kept (ids start with a date)."""
+    merged = sorted({*(load_seen_notes(db) or []), *ids})[-MAX_SEEN_NOTES:]
+    row = db.get(Setting, SEEN_NOTES_KEY)
+    if row is None:
+        db.add(Setting(key=SEEN_NOTES_KEY, value=merged))
+    else:
+        row.value = merged
+    db.flush()
+    return merged

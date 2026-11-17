@@ -313,6 +313,15 @@ export const en = {
     hoursMinutes: '{hours} h {minutes} min',
     days: '{value} days',
   },
+  whatsNew: {
+    title: "What's new",
+    intro: 'What changed since your last visit.',
+    allIntro: 'Everything that has changed, by month.',
+    empty: 'Nothing to show yet.',
+    gotIt: 'Got it!',
+    showMore: { one: 'Show {count} more', other: 'Show {count} more' },
+    kinds: { new: 'New', improved: 'Improved', fixed: 'Fixed' },
+  },
   errors: {
     generic: 'Something went wrong. Try again.',
     requestFailed: 'The request failed (HTTP {status}).',

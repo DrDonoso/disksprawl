@@ -4,7 +4,7 @@ import { api, query } from './client'
 import type {
   AuthStatusOut, BrowseOut, CapacityHistoryOut, CronPreviewOut, DiffOut, DirectoryIn, DirectoryListOut,
   DirectorySummaryOut, EngineListOut, ProgressOut, ScanListOut, ScanOut, SettingsIn, SettingsOut, TreeOut,
-  VersionOut,
+  VersionOut, WhatsNewOut,
 } from './schema.gen'
 
 /** How often screens refresh: every 2 s while a scan is queued or running, otherwise every 30 s. */
@@ -12,6 +12,8 @@ export const ACTIVE_REFRESH = 2_000
 export const IDLE_REFRESH = 30_000
 
 export const useAuthStatus = () => useQuery({ queryKey: ['auth'], queryFn: () => api<AuthStatusOut>('/auth/status'), staleTime: Infinity })
+
+export const useWhatsNew = () => useQuery({ queryKey: ['whats-new'], queryFn: () => api<WhatsNewOut>('/whats-new'), staleTime: Infinity })
 
 export const useVersion = () => useQuery({ queryKey: ['version'], queryFn: () => api<VersionOut>('/version'), staleTime: Infinity })
 

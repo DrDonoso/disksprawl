@@ -1,0 +1,133 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 12px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+}
+
+.modal {
+  width: min(560px, 100%);
+}
+
+.dialog {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleBar h2 {
+  font-size: 1.25rem;
+}
+
+.notes {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note {
+  --accent: var(--primary);
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+}
+
+.new {
+  --accent: var(--primary);
+}
+
+.improved {
+  --accent: var(--ok);
+}
+
+.fixed {
+  --accent: var(--warn);
+}
+
+.icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kind {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  outline: none;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.body {
+  margin: 0;
+  color: var(--text);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.month {
+  display: grid;
+  gap: 8px;
+}
+
+.monthTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+  color: var(--text-muted);
+}
+
+@media (forced-colors: active) {
+  .note,
+  .icon {
+    border-color: CanvasText;
+  }
+}

@@ -315,6 +315,15 @@ export const es: Messages<Dictionary> = {
     hoursMinutes: '{hours} h {minutes} min',
     days: '{value} días',
   },
+  whatsNew: {
+    title: 'Novedades',
+    intro: 'Lo que ha cambiado desde tu última visita.',
+    allIntro: 'Todo lo que ha cambiado, por meses.',
+    empty: 'Todavía no hay nada que mostrar.',
+    gotIt: '¡Entendido!',
+    showMore: { one: 'Mostrar {count} más', other: 'Mostrar {count} más' },
+    kinds: { new: 'Nuevo', improved: 'Mejorado', fixed: 'Corregido' },
+  },
   errors: {
     generic: 'Algo ha fallado. Vuelve a intentarlo.',
     requestFailed: 'La petición ha fallado (HTTP {status}).',

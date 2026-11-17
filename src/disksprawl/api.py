@@ -38,6 +38,8 @@ from .schemas import (
     SettingsOut,
     TreeOut,
     VersionOut,
+    WhatsNewOut,
+    WhatsNewSeenIn,
 )
 
 public = APIRouter(prefix="/api")
@@ -345,6 +347,17 @@ def settings_out(request: Request, values: dict[str, int]) -> SettingsOut:
 @router.get("/settings", response_model=SettingsOut)
 def get_settings(request: Request, db: DB) -> SettingsOut:
     return settings_out(request, settings_store.load(db))
+
+
+@router.get("/whats-new", response_model=WhatsNewOut)
+def get_whats_new(db: DB) -> WhatsNewOut:
+    return WhatsNewOut(seen=settings_store.load_seen_notes(db))
+
+
+@router.post("/whats-new/seen", response_model=WhatsNewOut)
+def post_whats_new_seen(body: WhatsNewSeenIn, request: Request) -> WhatsNewOut:
+    with transaction(request.app.state.sessions) as db:
+        return WhatsNewOut(seen=settings_store.mark_notes_seen(db, body.ids))
 
 
 @router.put("/settings", response_model=SettingsOut)

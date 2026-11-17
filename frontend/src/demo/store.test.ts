@@ -146,3 +146,26 @@ describe('biggest changes', () => {
     ])
   })
 })
+
+describe("what's new", () => {
+  test('records the notes read, sorted and without repeats, checked like the API', () => {
+    const { demo } = store()
+    expect(demo.whatsNew()).toEqual({ seen: null })
+    const read = ['2026-11-16-a', '2026-12-01-b']
+    expect(demo.markWhatsNewSeen({ ids: ['2026-12-01-b', '2026-11-16-a'] })).toEqual({ seen: read })
+    expect(demo.markWhatsNewSeen({ ids: ['2026-11-16-a'] })).toEqual({ seen: read })
+    const invalid: Array<[unknown, string]> = [
+      [[], 'too_short'],
+      [Array.from({ length: 501 }, (_, index) => `2026-01-01-n${index}`), 'too_long'],
+      ['2026-11-16-a', 'list_type'],
+      [[7], 'string_type'],
+      [['notes'], 'string_pattern_mismatch'],
+      [[`2026-11-16-${'a'.repeat(70)}`], 'string_too_long'],
+      [undefined, 'missing'],
+    ]
+    for (const [ids, type] of invalid) {
+      expect(() => demo.markWhatsNewSeen({ ids } as never)).toThrow(expect.objectContaining({ status: 422, fields: { ids: type } }))
+    }
+    expect(() => demo.markWhatsNewSeen({ ids: read, all: true } as never)).toThrow(expect.objectContaining({ fields: { all: 'extra_forbidden' } }))
+  })
+})

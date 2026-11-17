@@ -105,6 +105,13 @@ Every text of the interface is in `frontend/src/i18n/locales/en.ts` and `es.ts`,
 keys: the type checker fails when one is missing. If you do not speak Spanish, add the English text
 and say so in the pull request.
 
+### What's new notes
+
+A change people will notice (a feature, an improvement, a fix) comes with a note in
+`frontend/src/whatsNew/notes/`, in English and Spanish. See
+[What's new notes](docs/development.md#whats-new-notes) for the format. Never rename or delete a
+released note.
+
 ### API changes
 
 After changing the API, regenerate the contract and the types, and commit both:
