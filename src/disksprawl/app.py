@@ -1,4 +1,5 @@
-"""The application factory: API, scan queue, scheduler and the built web app, in one process."""
+"""The application factory: API, scan queue, scheduler, notifications and the built web app, in one
+process."""
 
 import logging
 import traceback
@@ -17,6 +18,7 @@ from .config import Settings
 from .db import create_db_engine, migrate, session_factory
 from .engines import detect_engines
 from .errors import AppError
+from .notifications import Notifier
 from .scanning import Scanner
 from .scheduler import Scheduler
 from .schemas import HealthOut
@@ -34,6 +36,9 @@ STATIC_FILES = (
     "icon-maskable-512.png",
     "manifest.webmanifest",
     "robots.txt",
+    # The service worker that shows the notifications, and their icon for Android's status bar.
+    "sw.js",
+    "badge-96.png",
 )
 
 
@@ -75,17 +80,23 @@ def create_app(config: Settings | None = None) -> FastAPI:
                 f"{info.version} ({info.binary or 'built in'})" if info.available else "missing",
             )
         application.state.auth = Auth(settings, sessions)
-        scanner = Scanner(sessions, settings, lambda: application.state.engines)
+        notifier = Notifier(sessions, settings)
+        application.state.notifier = notifier
+        scanner = Scanner(
+            sessions, settings, lambda: application.state.engines, on_finished=notifier.wake
+        )
         application.state.scanner = scanner
         scheduler = Scheduler(sessions, settings, scanner)
         application.state.scheduler = scheduler
         scanner.start()
         scheduler.start()
+        notifier.start()
         try:
             yield
         finally:
             scheduler.shutdown()
             scanner.stop()
+            notifier.stop()
             engine.dispose()
 
     application = DiskSprawlApp(

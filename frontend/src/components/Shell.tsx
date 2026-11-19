@@ -33,11 +33,11 @@ function useCompact(): boolean {
   return compact
 }
 
-/** `?settings=directories|general|new|<id>` opens the settings dialog (links and back button work). */
+/** `?settings=directories|general|notifications|new|<id>` opens the settings dialog (links and back button work). */
 export function useSettingsTarget(): [SettingsTarget | null, (target: SettingsTarget | null) => void] {
   const [params, setParams] = useSearchParams()
   const raw = params.get('settings')
-  const target: SettingsTarget | null = raw === 'directories' || raw === 'general' || raw === 'new'
+  const target: SettingsTarget | null = raw === 'directories' || raw === 'general' || raw === 'notifications' || raw === 'new'
     ? raw
     : raw && /^\d+$/.test(raw) ? Number(raw) : null
   const open = (next: SettingsTarget | null) => setParams(previous => {

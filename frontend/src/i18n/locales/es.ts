@@ -258,7 +258,7 @@ export const es: Messages<Dictionary> = {
   },
   settings: {
     title: 'Ajustes',
-    tabs: { directories: 'Directorios', general: 'General' },
+    tabs: { directories: 'Directorios', general: 'General', notifications: 'Notificaciones' },
     directoriesIntro: 'Cada directorio tiene su propia programación y forma de escaneo. Su orden es el del menú.',
     add: 'Añadir directorio',
     paused: 'en pausa',
@@ -299,6 +299,40 @@ export const es: Messages<Dictionary> = {
     timezone: 'Zona horaria del servidor: {timezone} (la variable TZ).',
     saved: 'Ajustes guardados.',
     version: 'DiskSprawl {version}',
+  },
+  notifications: {
+    intro: 'DiskSprawl puede enviar notificaciones a este navegador o móvil, aunque esté cerrado. Cada dispositivo elige las suyas.',
+    device: 'Notificaciones en este dispositivo',
+    deviceHint: 'La primera vez, el navegador pide permiso.',
+    choices: 'Avisarme cuando',
+    kinds: {
+      manual_scans: {
+        label: 'Termine un escaneo lanzado con «Escanear ahora»',
+        description: 'Con su tamaño y cuánto ha cambiado desde el escaneo anterior.',
+      },
+      scheduled_scans: {
+        label: 'Termine un escaneo programado',
+        description: 'Desactivado por defecto: suelen ejecutarse de noche.',
+      },
+      failed_scans: {
+        label: 'Un escaneo falle o se interrumpa',
+        description: 'Con el motivo, como una carpeta que no está montada.',
+      },
+      capacity: {
+        label: 'Un volumen esté casi lleno',
+        description: 'Cuando su uso alcance el umbral de aviso o el crítico de la pestaña General.',
+      },
+    },
+    perDevice: 'Estas opciones son de este dispositivo: cada navegador o móvil elige las suyas.',
+    loadError: 'No se han podido cargar las notificaciones de este dispositivo.',
+    retry: 'Reintentar',
+    unavailable: {
+      demo: 'La demo no tiene servidor, así que no envía notificaciones. Instala DiskSprawl para recibirlas.',
+      insecure: 'Los navegadores solo ofrecen notificaciones a los sitios abiertos por HTTPS, o en este mismo ordenador. Abre DiskSprawl en una dirección HTTPS, por ejemplo a través de un proxy inverso.',
+      install: 'Para recibir notificaciones en el iPhone o el iPad, añade DiskSprawl a la pantalla de inicio (Compartir → Añadir a pantalla de inicio) y ábrelo desde allí.',
+      unsupported: 'Este navegador no tiene notificaciones.',
+      denied: 'Las notificaciones de DiskSprawl están bloqueadas en este dispositivo: permítelas en los ajustes del navegador o del sistema.',
+    },
   },
   auth: {
     title: 'DiskSprawl',
@@ -364,6 +398,8 @@ export const es: Messages<Dictionary> = {
       invalid_exclude: 'Los patrones usan nombres, * y ?, sin / \\ [ ni ].',
       too_many_excludes: 'Demasiados patrones (como mucho 50).',
       demo_unavailable: 'Esto necesita un servidor real, así que no está disponible en la demo.',
+      push_service_unsupported: 'Este navegador usa un servicio de notificaciones al que DiskSprawl no envía: usa Chrome, Edge, Firefox o Safari.',
+      push_subscription_not_found: 'El servidor había olvidado este dispositivo. Se ha vuelto a registrar: revisa sus notificaciones.',
     },
   },
   demo: {

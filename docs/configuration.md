@@ -14,6 +14,7 @@ the web interface.
 - [Host names and reverse proxies](#host-names-and-reverse-proxies)
 - [Folders to analyze](#folders-to-analyze)
 - [Settings in the interface](#settings-in-the-interface)
+- [Notifications](#notifications)
 - [Language and theme](#language-and-theme)
 - [Set by the image](#set-by-the-image)
 - [Applying changes](#applying-changes)
@@ -36,7 +37,7 @@ time zone or a malformed host name.
 | `APP_PORT` | `7780` | Host port. |
 | `TZ` | `Etc/UTC` | Time zone of the schedules and of the dates shown as server time. |
 | `AUTH_PASSWORD` | empty | Single password for the web interface; empty leaves it open. |
-| `AUTH_SECRET` | generated | Key that signs the session cookies. |
+| `AUTH_SECRET` | generated | Key that signs the session cookies and the notifications. |
 | `AUTH_COOKIE_SECURE` | `false` | Session cookie over HTTPS only, and HSTS. |
 | `SESSION_HOURS` | `168` | How long a sign-in lasts, in hours. |
 | `ALLOWED_HOSTS` | empty | Extra host names the app answers to. |
@@ -71,7 +72,9 @@ Set a password whenever the port is reachable by people or devices you do not tr
 **`AUTH_SECRET`**: the key that signs the session cookies, at least 32 characters; generate one
 with `openssl rand -hex 32`. When empty, DiskSprawl creates a random key once and keeps it in the
 data volume (`session.key`), which is enough for a single installation. Changing the key signs
-everyone out.
+everyone out. The key that signs the [notifications](#notifications) is derived from it too:
+after a change, each device with notifications on subscribes again the next time DiskSprawl
+opens there.
 
 **`AUTH_COOKIE_SECURE`**: set it to `true` when DiskSprawl is opened over HTTPS, usually behind a
 reverse proxy. The session cookie is then sent over HTTPS only and browsers are told to always use
@@ -152,6 +155,48 @@ checks the expression as you type and shows its next three runs.
 | Smallest folder stored | 1 MiB | 1–1024 | Smaller folders count in the totals and appear as "loose files and small folders". |
 | Warning threshold | 80 % | 1–99 | From this use on, a volume's bar turns amber. |
 | Critical threshold | 90 % | 2–100 | From this use on, it turns red. Must be above the warning threshold. |
+
+**⚙ Settings → Notifications** turns on the notifications of the browser or phone it is opened on,
+and chooses which ones it gets: see below.
+
+## Notifications
+
+There is nothing to set on the server: each browser or phone turns them on in **⚙ Settings →
+Notifications**, which asks the browser for permission, and chooses which ones it gets. They
+arrive in its language, even with DiskSprawl closed, and tapping one opens its directory.
+
+| Notification | Default | What it tells |
+| --- | --- | --- |
+| A scan started with **Scan now** finishes | on | The directory's size, how much it changed since the previous scan, how long it took and its errors. |
+| A scheduled scan finishes | off | The same, for the scans started by their schedule, which usually run at night. |
+| A scan fails or is interrupted | on | Why, such as a folder that is not mounted, or a restart of DiskSprawl. Cancelled scans tell nobody. |
+| A volume is nearly full | on | The directories of a volume whose use reaches the warning or the critical threshold of **⚙ Settings → General**, with its use and free space. |
+
+A volume is told once per level, and again only after its use has dropped 2 points below the
+threshold, so a volume hovering around one does not notify again and again. A device that turns
+these on is told the volumes already above a threshold. The choices belong to each device: the
+same person can get everything on a computer and only the failures on a phone.
+
+They need:
+
+1. **HTTPS.** Browsers only offer notifications to pages opened over HTTPS, or at `localhost` on
+   the same computer; at `http://<address>:7780` the tab explains it. Put DiskSprawl behind a
+   [reverse proxy with HTTPS](deployment.md#reverse-proxy-and-https).
+2. **On an iPhone or iPad** (iOS or iPadOS 16.4 or later), DiskSprawl added to the Home Screen
+   (Safari's **Share → Add to Home Screen**) and opened from there. Android, and Chrome, Edge,
+   Firefox and Safari on computers, need nothing else.
+3. **Outbound HTTPS** (port 443) from the container to the browsers' push services:
+   `fcm.googleapis.com` (Chrome, and Edge on Android), `*.push.apple.com` (Safari, iPhone and
+   iPad), `*.push.services.mozilla.com` (Firefox) and `*.notify.windows.com` (Edge on Windows).
+   DiskSprawl sends to no other address and follows no redirect.
+
+With a password, signing out on a device pauses its notifications until it signs in there again.
+A device its push service no longer knows (its browser data was cleared, or the app was removed)
+is forgotten, and so is one whose push service refuses three notifications in a row; DiskSprawl
+keeps 50 devices at most. A notification that cannot be sent is tried again for a day, unless a
+newer one about the same directory or volume replaces it first. Failures are logged with the push
+service and never with the device's address, for example
+`Push message not sent to fcm.googleapis.com (URLError)` when the container cannot reach it.
 
 ## Language and theme
 

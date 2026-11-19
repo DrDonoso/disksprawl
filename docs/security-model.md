@@ -97,8 +97,9 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 
 and `Strict-Transport-Security` when `AUTH_COOKIE_SECURE=true`. The web interface loads nothing
 from other sites: no fonts, scripts or analytics. It has no inline scripts either: the script that
-applies the theme before the page is drawn is a file of the bundle, like the rest. Request bodies
-over 64 KiB are refused.
+applies the theme before the page is drawn is a file of the bundle, like the rest. Its only service
+worker, `/sw.js`, is registered when a device turns notifications on, and only shows them and opens
+their page: it intercepts no request and caches nothing. Request bodies over 64 KiB are refused.
 
 ## Reverse proxies
 
@@ -112,14 +113,23 @@ so trusting a network that untrusted clients can use would let them evade it. Se
 - **Stored** in the `data` volume (SQLite): the directories and their options, the folders of each
   kept scan with their sizes and counts, the totals of older scans, the paths that could not be
   read, capacity measurements, the settings, the digests of active sessions and, when
-  `AUTH_SECRET` is not set, the session signing key. Files and directories are created readable by
-  the container's user only.
+  `AUTH_SECRET` is not set, the session signing key. For each device with notifications on: its
+  address at its push service and its keys, its language, the address DiskSprawl was opened at,
+  its choices, and the notifications still to send to it. Files and directories are created
+  readable by the container's user only.
 - **Not stored**: file contents, the names of files (except those that could not be read) and the
   password.
 - **Logs** identify directories and scans by number. Database errors never include the values of
   their parameters, and unexpected errors log their type and stack trace but not their message.
-  When an engine fails, its last error lines are logged, and they may quote folder names.
-- Nothing is sent anywhere: DiskSprawl makes no outgoing connections.
+  When an engine fails, its last error lines are logged, and they may quote folder names. The
+  address of a device with notifications is never logged, only its push service.
+- **Outgoing connections**: none, except the notifications of the devices that turn them on. Each
+  one is encrypted for its device, so only that device can read it (Web Push, RFC 8291), signed
+  with a key derived from the session signing key (RFC 8292), and sent to the device's push service:
+  Apple's, Google's, Mozilla's or Microsoft's, the only addresses DiskSprawl sends to, never
+  following a redirect. A notification carries the name of a directory, sizes, the time a scan took
+  and the reason it failed, never a path or a file name. Without HTTPS, browsers offer no
+  notifications, so nothing is ever sent.
 - Deleting a directory deletes its history; scans beyond the retention lose their folders.
 
 ## The public demo

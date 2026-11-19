@@ -51,6 +51,16 @@ describe('the demo API', () => {
     expect(await response?.json()).toEqual({ code: 'invalid_origin' })
   })
 
+  test('what needs a real server answers that it is not available in the demo', async () => {
+    for (const operation of Object.keys(UNAVAILABLE_IN_DEMO)) {
+      const [method, path] = operation.split(' ')
+      const request = new Request(new URL(path, location.origin), method === 'GET' ? {} : { method, headers: { 'X-DiskSprawl-Request': '1' } })
+      const response = await getResponse(handlers, request)
+      expect(response?.status, operation).toBe(501)
+      expect(await response?.json()).toEqual({ code: 'demo_unavailable' })
+    }
+  })
+
   test('the committed service worker matches the installed MSW (after upgrading msw, run `npx msw init public`)', () => {
     expect(worker).toContain(`const PACKAGE_VERSION = '${mswPackage.version}'`)
   })

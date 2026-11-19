@@ -8,12 +8,13 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import cron, paths, queries, settings_store
+from . import cron, notifications, paths, queries, settings_store
 from .auth import COOKIE, Auth, client_address, get_auth, require_session
 from .config import Settings
 from .db import Directory, Scan, transaction, utcnow
 from .engines import EngineInfo
 from .errors import AppError
+from .notifications import Notifier
 from .scanning import Scanner
 from .scheduler import Scheduler
 from .schemas import (
@@ -31,6 +32,11 @@ from .schemas import (
     LoginIn,
     OrderIn,
     ProgressOut,
+    PushConfigOut,
+    PushEndpointIn,
+    PushPreferencesIn,
+    PushPreferencesOut,
+    PushSubscriptionIn,
     QueueOut,
     ScanListOut,
     ScanOut,
@@ -58,6 +64,11 @@ def scanner(request: Request) -> Scanner:
 
 def scheduler(request: Request) -> Scheduler:
     value: Scheduler = request.app.state.scheduler
+    return value
+
+
+def notifier(request: Request) -> Notifier:
+    value: Notifier = request.app.state.notifier
     return value
 
 
@@ -375,3 +386,37 @@ def put_settings(body: SettingsIn, request: Request) -> SettingsOut:
     if values["capacity_interval_minutes"] != before["capacity_interval_minutes"]:
         scheduler(request).schedule_capacity(values["capacity_interval_minutes"])
     return settings_out(request, values)
+
+
+# Notifications (src/disksprawl/notifications.py): each browser registers itself and chooses what
+# it is told.
+
+
+@router.get("/push", response_model=PushConfigOut)
+def push_config(request: Request) -> PushConfigOut:
+    return PushConfigOut(public_key=notifier(request).public_key)
+
+
+@router.put("/push/subscription", response_model=PushPreferencesOut)
+def push_subscribe(body: PushSubscriptionIn, request: Request) -> PushPreferencesOut:
+    # The security middleware already checked that this is the page's origin, and this server's.
+    origin = request.headers.get("origin", "")
+    session = get_auth(request).session_digest(request.cookies.get(COOKIE))
+    with transaction(request.app.state.sessions) as db:
+        preferences = notifications.subscribe(db, body, origin, session)
+    notifier(request).wake()
+    return preferences
+
+
+@router.patch("/push/subscription", response_model=PushPreferencesOut)
+def push_choose(body: PushPreferencesIn, request: Request) -> PushPreferencesOut:
+    with transaction(request.app.state.sessions) as db:
+        preferences = notifications.choose(db, body)
+    notifier(request).wake()
+    return preferences
+
+
+@router.post("/push/unsubscribe", status_code=204, response_class=Response)
+def push_unsubscribe(body: PushEndpointIn, request: Request) -> None:
+    with transaction(request.app.state.sessions) as db:
+        notifications.unsubscribe(db, body.endpoint)

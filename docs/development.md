@@ -40,6 +40,8 @@ src/disksprawl/          FastAPI application
   scanning.py            scan queue, worker processes, results, retention
   scheduler.py, cron.py  schedules (APScheduler) and cron expressions
   capacity.py, paths.py  volume capacity (statvfs) and the /data boundary
+  notifications.py       notifications: what each device is told, queued and sent in rounds
+  webpush.py             Web Push: encryption, VAPID signature, the push services
   security.py, auth.py   host and origin checks, headers, optional password
   engines/               the worker process and the Native, du, ncdu and gdu engines
   migrations/            Alembic migrations
@@ -101,6 +103,11 @@ uv run python scripts/export_openapi.py --check
   run them with the clock moved, for example with libfaketime:
   `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/faketime/libfaketimeMT.so.1 FAKETIME=+45d uv run pytest`.
   Use relative offsets (`+2d`, `+1y`): they also move the monotonic clock that `time.sleep` needs.
+- Nothing a test sends reaches a push service: `tests/conftest.py` replaces the transport of
+  `webpush` with a stand-in that records the requests (`tests/push_helpers.py` also decrypts them,
+  as a browser would), and the rounds of notifications are paused like the scheduler
+  (`Notifier.paused`): tests call `Notifier.tick()` with the moment they need.
+  `smoke_server.py` answers for the push services too.
 - `scripts/docker_smoke.sh` builds nothing: it starts the image tagged `IMAGE_TAG` (default `ci`)
   with Compose and a sample tree, checks `/health`, `/api/version`, the four engines, a scan with
   each engine in both measures with matching totals, the user 1000, the read-only file system and
@@ -135,7 +142,9 @@ npm run e2e:demo
   tree, serving the build in `frontend/dist` (run `npm run build` first). They add a directory,
   scan it, explore its treemap and changes, and check the settings, the menu, the language and
   theme menus (with a browser in Spanish) and a 3440 px wide window, with accessibility (axe)
-  checks. Install the browser once with `npx playwright install --with-deps chromium`.
+  checks. `e2e/push.spec.ts` turns the notifications of the browser on and off and changes its
+  choices, with stand-ins for the permission and the browser's subscription (Chromium has no push
+  service in tests). Install the browser once with `npx playwright install --with-deps chromium`.
 - `npm run e2e:demo` tests the built demo, see [the demo](demo.md).
 
 ## API contract and generated types

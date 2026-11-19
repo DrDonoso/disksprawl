@@ -107,6 +107,11 @@ for (const [language, messages] of [['en', en], ['es', es]] as [string, Texts][]
     await expectAccessible(page)
     await dialog.getByRole('tab', { name: messages.settings.tabs.general }).click()
     await expectAccessible(page)
+    // The demo has no server to send notifications: the tab says so, and asks the API nothing.
+    await dialog.getByRole('tab', { name: messages.settings.tabs.notifications }).click()
+    await expect(dialog).toContainText(messages.notifications.unavailable.demo)
+    await expect(dialog.getByRole('switch')).toHaveCount(0)
+    await expectAccessible(page)
   })
 }
 

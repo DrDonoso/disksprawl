@@ -1,9 +1,12 @@
 """Request and response models: the API contract (exported to OpenAPI, typed in the frontend)."""
 
+from collections.abc import Callable
 from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
+from . import webpush
 
 # A "What's new" note's id: YYYY-MM-DD-slug, the file name in frontend/src/whatsNew/notes/.
 NOTE_ID_PATTERN = r"^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$"
@@ -328,3 +331,70 @@ class VersionOut(Contract):
 
 class HealthOut(Contract):
     status: str
+
+
+# Notifications. Each browser (or app added to a Home Screen) that turns them on registers with its
+# address at its push service and its keys, as PushSubscription.toJSON() gives them, and chooses
+# what it wants to be told.
+
+PushLocale = Literal["en", "es"]
+PushEndpoint = Annotated[str, StringConstraints(min_length=1, max_length=2048)]
+
+
+def _checked(check: Callable[[str], bytes], value: str) -> str:
+    try:
+        check(value)
+    except ValueError:
+        raise ValueError("invalid") from None
+    return value
+
+
+class PushConfigOut(Contract):
+    # The server's VAPID public key: the applicationServerKey browsers subscribe with (an
+    # uncompressed P-256 point in URL-safe base64).
+    public_key: str
+
+
+class PushKeysIn(Input):
+    p256dh: str = Field(max_length=100)
+    auth: str = Field(max_length=40)
+
+    @field_validator("p256dh")
+    @classmethod
+    def valid_key(cls, value: str) -> str:
+        return _checked(webpush.browser_key, value)
+
+    @field_validator("auth")
+    @classmethod
+    def valid_secret(cls, value: str) -> str:
+        return _checked(webpush.auth_secret, value)
+
+
+class PushSubscriptionIn(Input):
+    endpoint: PushEndpoint
+    keys: PushKeysIn
+    # Language of the notifications: the interface's.
+    locale: PushLocale
+
+
+class PushEndpointIn(Input):
+    endpoint: PushEndpoint
+
+
+class PushPreferencesOut(Contract):
+    # What this device is told: the end of the scans started with "Scan now", the end of the
+    # scheduled ones, failed or interrupted scans, and volumes reaching a threshold.
+    manual_scans: bool
+    scheduled_scans: bool
+    failed_scans: bool
+    capacity: bool
+
+
+class PushPreferencesIn(Input):
+    """Only the choices sent change (null changes nothing)."""
+
+    endpoint: PushEndpoint
+    manual_scans: bool | None = None
+    scheduled_scans: bool | None = None
+    failed_scans: bool | None = None
+    capacity: bool | None = None

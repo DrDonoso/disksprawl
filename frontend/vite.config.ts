@@ -66,14 +66,18 @@ function demoSite(): Plugin {
   }
 }
 
-/** public/mockServiceWorker.js is copied into every build: only the demo may ship it. */
-function withoutMockServiceWorker(): Plugin {
+/**
+ * Files of public/ that only one of the builds may ship: public/mockServiceWorker.js is the demo's
+ * API, and public/sw.js shows the notifications of a real server (the demo has none, and its scope
+ * is MSW's).
+ */
+function withoutPublicFile(fileName: string): Plugin {
   return {
-    name: 'disksprawl:without-mock-service-worker',
+    name: `disksprawl:without-${fileName}`,
     apply: 'build',
     async writeBundle(options) {
       const { rm } = await import('node:fs/promises')
-      await rm(`${options.dir}/mockServiceWorker.js`, { force: true })
+      await rm(`${options.dir}/${fileName}`, { force: true })
     },
   }
 }
@@ -119,7 +123,7 @@ export default defineConfig(({ mode }) => {
   // never overwrites the production bundle that the backend serves.
   const demo = mode === 'demo'
   return {
-    plugins: [react(), themeBoot(), demo ? demoSite() : withoutMockServiceWorker()],
+    plugins: [react(), themeBoot(), demo ? [demoSite(), withoutPublicFile('sw.js')] : withoutPublicFile('mockServiceWorker.js')],
     // The demo's `/api/version` date (src/demo/handlers.ts); unused by normal builds.
     define: { __DEMO_BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)) },
     build: { outDir: demo ? 'dist-demo' : 'dist' },

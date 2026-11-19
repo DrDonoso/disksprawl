@@ -19,6 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     event,
+    false,
     text,
 )
 from sqlalchemy.engine import Dialect, Engine
@@ -105,6 +106,9 @@ class Scan(Base):
     capacity_free: Mapped[int | None]
     # Whether scan_entries still holds this scan's folders (retention keeps the latest ones).
     has_detail: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Whether the notifications of this scan's end were queued (none for scans still queued or
+    # running). The scans of versions without notifications count as notified.
+    notified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class PathNode(Base):
@@ -179,6 +183,61 @@ class AuthSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     expires_at: Mapped[datetime]
+
+
+class PushSubscription(Base):
+    """A browser, or an app added to a Home Screen, that turned notifications on: where its push
+    service delivers them, its keys, and what it wants to be told."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # The address of this browser at its push service (a capability: whoever has it can send).
+    endpoint: Mapped[str] = mapped_column(String(2048), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(100))
+    auth: Mapped[str] = mapped_column(String(40))
+    # The address DiskSprawl was opened at on the device: the pages its notifications open.
+    origin: Mapped[str] = mapped_column(String(300))
+    # Language of its notifications: the interface's, en or es.
+    locale: Mapped[str] = mapped_column(String(2))
+    # With a password, the digest of the session that registered it (as auth_sessions.token_hash);
+    # signing out there sets it to None, which pauses its notifications until it signs in again.
+    session_hash: Mapped[str | None] = mapped_column(String(64))
+    notify_manual_scans: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_scheduled_scans: Mapped[bool] = mapped_column(Boolean, default=False)
+    notify_failed_scans: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_capacity: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The level of each volume (by device id) this browser was last told about: "warning" or
+    # "critical". A volume that is not listed is below the warning threshold.
+    capacity_levels: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    # Notifications its push service refused in a row.
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    # Last time the device registered (each time DiskSprawl opens there).
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class PushMessage(Base):
+    """A notification still to send to one device: the end of a scan, or a volume that filled."""
+
+    __tablename__ = "push_messages"
+    __table_args__ = (
+        Index("ix_push_messages_subscription", "subscription_id"),
+        Index("ix_push_messages_scan", "scan_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subscription_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("push_subscriptions.id", ondelete="CASCADE")
+    )
+    # scan_completed, scan_failed or capacity.
+    kind: Mapped[str] = mapped_column(String(20))
+    scan_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("scans.id", ondelete="CASCADE")
+    )
+    # What a capacity notification tells: the level, the directories on the volume, the use.
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
 def create_db_engine(path: Path) -> Engine:

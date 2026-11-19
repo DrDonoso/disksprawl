@@ -9,10 +9,11 @@ from collections import deque
 from datetime import datetime, timedelta
 
 from fastapi import Request
+from sqlalchemy import update
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings
-from .db import AuthSession, transaction, utcnow
+from .db import AuthSession, PushSubscription, transaction, utcnow
 from .errors import AppError
 
 COOKIE = "disksprawl_session"
@@ -113,14 +114,26 @@ class Auth:
             session = db.get(AuthSession, token_digest(token))
             return session is not None and session.expires_at > utcnow()
 
+    def session_digest(self, cookie: str | None) -> str | None:
+        """How the session of a valid cookie is stored (its token's digest); None without one."""
+        token = self._token(cookie) if self.enabled else None
+        return token_digest(token) if token is not None else None
+
     def revoke(self, cookie: str | None) -> None:
         token = self._token(cookie)
         if token is None:
             return
+        digest = token_digest(token)
         with transaction(self.sessions) as db:
-            session = db.get(AuthSession, token_digest(token))
+            session = db.get(AuthSession, digest)
             if session is not None:
                 db.delete(session)
+            # Signed out, the device gets no more notifications until it signs in again.
+            db.execute(
+                update(PushSubscription)
+                .where(PushSubscription.session_hash == digest)
+                .values(session_hash=None)
+            )
 
 
 def get_auth(request: Request) -> Auth:

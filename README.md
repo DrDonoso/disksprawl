@@ -92,6 +92,10 @@ and exactly which folders grew or shrank between two scans. It only ever reads y
 - **History** charts of each directory's size and of its volume's use over 30, 90 or 365 days,
   and the latest scans with their engine, duration and errors. A point of the size chart or the
   date of a scan opens that scan in the treemap.
+- **Notifications** on your phone or computer, even with DiskSprawl closed: when a scan finishes
+  (with its size and how much it changed) or fails, and when a volume reaches the warning or the
+  critical threshold. Each browser or phone chooses which ones it gets. They need DiskSprawl opened
+  over HTTPS; on an iPhone or iPad, added to the Home Screen.
 - The whole width of the window, from a phone to an ultrawide screen: on wide screens the treemap
   grows and its table and the latest scans move beside it.
 
@@ -137,6 +141,7 @@ flowchart LR
   browser["Browser"] -- "port 7780" --> app["DiskSprawl container<br/>FastAPI API + React app<br/>scheduler and scan queue"]
   app -- "one scan at a time:<br/>Native, du, ncdu or gdu" --> folders[("Your folders<br/>mounted read-only under /data")]
   app --> db[("SQLite<br/>data volume")]
+  app -. "notifications, encrypted<br/>(only if a device turns them on)" .-> push["The browsers'<br/>push services"]
 ```
 
 - The container serves the web interface and its API, schedules the scans and runs them one at a
@@ -145,7 +150,11 @@ flowchart LR
 - The engine's output is reduced to the folders worth keeping (1 MiB or more by default) and
   stored in SQLite with the totals, so the treemap, the changes and the history are queries, not
   new scans.
-- **Backend**: Python 3.14, FastAPI, SQLAlchemy 2 and Alembic, SQLite, APScheduler and ijson.
+- Notifications use Web Push: each one is encrypted for the device that asked for it and sent
+  through its browser's push service (Apple, Google, Mozilla or Microsoft), the only connections
+  DiskSprawl makes.
+- **Backend**: Python 3.14, FastAPI, SQLAlchemy 2 and Alembic, SQLite, APScheduler, ijson and
+  cryptography.
 - **Frontend**: React 19, TypeScript, Vite, TanStack Query and React Aria Components; the treemap
   is drawn with the squarified algorithm, without chart libraries.
 - **Engines**: GNU du from the Debian base image, and the official static builds of ncdu 2.9.1 and
@@ -231,7 +240,7 @@ describes each one.
 | `APP_PORT` | `7780` | Host port. |
 | `TZ` | `Etc/UTC` | Time zone of the schedules, such as `Europe/Madrid`. |
 | `AUTH_PASSWORD` | empty | Single password (at least 12 characters); empty leaves the interface open. |
-| `AUTH_SECRET` | generated | Key that signs session cookies (at least 32 characters). |
+| `AUTH_SECRET` | generated | Key that signs session cookies and notifications (at least 32 characters). |
 | `AUTH_COOKIE_SECURE` | `false` | `true` when served over HTTPS. |
 | `SESSION_HOURS` | `168` | How long a sign-in lasts. |
 | `ALLOWED_HOSTS` | empty | Extra host names, such as a reverse proxy's domain; IP addresses and local names always work. |
@@ -239,7 +248,9 @@ describes each one.
 
 The schedules and scan methods of each directory, the capacity measurement interval, how many
 scans keep their folders (30 per directory), the smallest folder stored (1 MiB), the volume
-thresholds (80 % and 90 %) are set in the interface, under **⚙ Settings**. The language and the
+thresholds (80 % and 90 %) are set in the interface, under **⚙ Settings**, and so are the
+notifications of each device (**⚙ Settings → Notifications**; see
+[notifications](docs/configuration.md#notifications) for what they need). The language and the
 theme are chosen in the top bar, next to **⚙**, and each browser keeps its own.
 
 ## Scan engines
