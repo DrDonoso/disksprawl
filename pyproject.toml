@@ -15,6 +15,7 @@ dependencies = [
     "apscheduler>=3.10,<4",
     "ijson>=3.3",
     "tzdata>=2025.2",
+    "cryptography>=44",
 ]
 
 [project.urls]
