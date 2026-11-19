@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Smoke test of the production image with docker-compose.yml: health and version, the four engines,
-# one scan with each engine in both measures (they must agree), names that are not UTF-8 and an
-# unreadable folder, the non-root user, read-only folders and image, and the optional password.
+# the service worker of the notifications, one scan with each engine in both measures (they must
+# agree), names that are not UTF-8 and an unreadable folder, the non-root user, read-only folders
+# and image, and the optional password.
 #
 #   docker build --build-arg IMAGE_TAG=ci -t drdonoso/disksprawl:ci .
 #   IMAGE_TAG=ci scripts/docker_smoke.sh
@@ -49,6 +50,9 @@ curl -fsS "$base/api/version" | jq -e --arg tag "$IMAGE_TAG" '.version == $tag' 
 curl -fsS "$base/api/engines" | jq -c '[.items[] | {id, available, version}]'
 curl -fsS "$base/api/engines" | jq -e '[.items[] | select(.available and .version != null)] | length == 4' >/dev/null
 test "$(docker compose exec -T app id -u)" = 1000
+# The service worker that shows the notifications, as JavaScript, and the key browsers subscribe with.
+curl -fsS -D - -o /dev/null "$base/sw.js" | grep -qiE '^content-type: (text|application)/javascript'
+curl -fsS "$base/api/push" | jq -e '.public_key | length == 87' >/dev/null
 # Nothing can be written outside /app/data and /tmp: not the analyzed folders, not the image.
 if docker compose exec -T app touch /data/sample/written 2>/dev/null; then echo 'The sample tree is writable' >&2; exit 1; fi
 if docker compose exec -T app touch /app/written 2>/dev/null; then echo 'The image is writable' >&2; exit 1; fi

@@ -8,10 +8,13 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from push_helpers import PushService
 
+from disksprawl import webpush
 from disksprawl.app import create_app
 from disksprawl.config import Settings
 from disksprawl.db import Scan, transaction, utcnow
+from disksprawl.notifications import Notifier
 from disksprawl.scanning import import_entries
 from disksprawl.scheduler import Scheduler
 
@@ -26,6 +29,20 @@ def paused_schedules(monkeypatch: pytest.MonkeyPatch) -> None:
     """No schedule fires on its own during a test: a directory scanned daily at 03:00 would get an
     extra scan in any test that runs at that moment. Tests call the scheduler's methods instead."""
     monkeypatch.setattr(Scheduler, "paused", True)
+
+
+@pytest.fixture(autouse=True)
+def paused_notifications(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No notification round runs on its own during a test: tests call Notifier.tick()."""
+    monkeypatch.setattr(Notifier, "paused", True)
+
+
+@pytest.fixture(autouse=True)
+def push_service(monkeypatch: pytest.MonkeyPatch) -> PushService:
+    """Stands in for every push service: nothing a test sends leaves the machine."""
+    service = PushService()
+    monkeypatch.setattr(webpush, "TRANSPORT", service)
+    return service
 
 
 def write_tree(root: Path, spec: dict[str, object]) -> None:

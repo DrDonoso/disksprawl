@@ -1,0 +1,11 @@
+{
+  "kind": "new",
+  "en": {
+    "title": "Notifications on your phone or computer",
+    "body": "Turn them on in Settings → Notifications to hear when a scan finishes or fails and when a volume is nearly full. Each device chooses its own. They need DiskSprawl opened over HTTPS."
+  },
+  "es": {
+    "title": "Notificaciones en el móvil o el ordenador",
+    "body": "Actívalas en Ajustes → Notificaciones para saber cuándo termina o falla un escaneo y cuándo un volumen está casi lleno. Cada dispositivo elige las suyas. Necesitan abrir DiskSprawl por HTTPS."
+  }
+}

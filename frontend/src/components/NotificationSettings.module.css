@@ -1,0 +1,16 @@
+.choice {
+  display: grid;
+  gap: 2px;
+}
+
+/* Under its switch's label, past the track. */
+.choice p {
+  padding-left: 48px;
+}
+
+.failed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

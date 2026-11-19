@@ -178,6 +178,40 @@ export interface ProgressOut {
   threads: number
 }
 
+export interface PushConfigOut {
+  public_key: string
+}
+
+export interface PushEndpointIn {
+  endpoint: string
+}
+
+export interface PushKeysIn {
+  auth: string
+  p256dh: string
+}
+
+export interface PushPreferencesIn {
+  capacity?: boolean | null
+  endpoint: string
+  failed_scans?: boolean | null
+  manual_scans?: boolean | null
+  scheduled_scans?: boolean | null
+}
+
+export interface PushPreferencesOut {
+  capacity: boolean
+  failed_scans: boolean
+  manual_scans: boolean
+  scheduled_scans: boolean
+}
+
+export interface PushSubscriptionIn {
+  endpoint: string
+  keys: PushKeysIn
+  locale: 'en' | 'es'
+}
+
 export interface QueueOut {
   items: ProgressOut[]
 }

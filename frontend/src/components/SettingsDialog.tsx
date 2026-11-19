@@ -7,11 +7,15 @@ import { presetOf } from '../lib/schedule'
 import { DirectoryForm } from './DirectoryForm'
 import { GeneralSettings } from './GeneralSettings'
 import { Icon } from './Icon'
+import { NotificationSettings } from './NotificationSettings'
 import { Notice } from './ui'
 import styles from './SettingsDialog.module.css'
 
 /** What the settings dialog shows: a tab, the form of a new directory, or of an existing one. */
-export type SettingsTarget = 'directories' | 'general' | 'new' | number
+export type SettingsTarget = 'directories' | 'general' | 'notifications' | 'new' | number
+
+const TABS = ['directories', 'general', 'notifications'] as const
+type TabKey = (typeof TABS)[number]
 
 function DirectoryList({ onNavigate }: { onNavigate: (target: SettingsTarget) => void }) {
   const { t } = useI18n()
@@ -65,7 +69,8 @@ function DirectoryList({ onNavigate }: { onNavigate: (target: SettingsTarget) =>
   </div>
 }
 
-/** ⚙ Settings: the directories and their scan options, and the general settings. */
+/** ⚙ Settings: the directories and their scan options, the general settings, and the notifications
+ * of this device. */
 export function SettingsDialog({ target, onNavigate, onClose }: {
   target: SettingsTarget
   onNavigate: (target: SettingsTarget) => void
@@ -73,7 +78,7 @@ export function SettingsDialog({ target, onNavigate, onClose }: {
 }) {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const tab = target === 'general' ? 'general' : 'directories'
+  const tab: TabKey = target === 'general' || target === 'notifications' ? target : 'directories'
   return <ModalOverlay isOpen isDismissable onOpenChange={open => { if (!open) onClose() }} className={styles.overlay}>
     <Modal className={styles.modal}>
       <Dialog className={styles.dialog} aria-labelledby="settings-title">
@@ -83,10 +88,9 @@ export function SettingsDialog({ target, onNavigate, onClose }: {
             <Icon name="close" />
           </button>
         </div>
-        <Tabs selectedKey={tab} onSelectionChange={key => onNavigate(key === 'general' ? 'general' : 'directories')}>
+        <Tabs selectedKey={tab} onSelectionChange={key => onNavigate(TABS.find(item => item === key) ?? 'directories')}>
           <TabList aria-label={t('settings.title')} className={styles.tabs}>
-            <Tab id="directories" className={styles.tab}>{t('settings.tabs.directories')}</Tab>
-            <Tab id="general" className={styles.tab}>{t('settings.tabs.general')}</Tab>
+            {TABS.map(item => <Tab key={item} id={item} className={styles.tab}>{t(`settings.tabs.${item}`)}</Tab>)}
           </TabList>
           <TabPanel id="directories" className={styles.panel}>
             {target === 'new' || typeof target === 'number'
@@ -104,6 +108,7 @@ export function SettingsDialog({ target, onNavigate, onClose }: {
               : <DirectoryList onNavigate={onNavigate} />}
           </TabPanel>
           <TabPanel id="general" className={styles.panel}><GeneralSettings /></TabPanel>
+          <TabPanel id="notifications" className={styles.panel}><NotificationSettings /></TabPanel>
         </Tabs>
       </Dialog>
     </Modal>

@@ -10,8 +10,16 @@ import { DemoError, DemoStore } from './store'
 /** Logged for an /api request that no handler answers (the e2e tests watch for it). */
 export const UNHANDLED_PREFIX = '[demo] Unhandled API request:'
 
-/** Operations the demo cannot perform, with the reason (none: the whole API works in the demo). */
-export const UNAVAILABLE_IN_DEMO: Readonly<Record<string, string>> = {}
+/**
+ * Operations the demo cannot perform, with the reason: they answer `demo_unavailable` (501). The
+ * interface never calls them in the demo.
+ */
+export const UNAVAILABLE_IN_DEMO: Readonly<Record<string, string>> = {
+  'GET /api/push': 'Notifications need a server that sends them.',
+  'PUT /api/push/subscription': 'Notifications need a server that sends them.',
+  'PATCH /api/push/subscription': 'Notifications need a server that sends them.',
+  'POST /api/push/unsubscribe': 'Notifications need a server that sends them.',
+}
 
 let store = new DemoStore()
 
@@ -91,6 +99,15 @@ export const unhandledHandler = http.all('/api/*', ({ request }) => {
   return HttpResponse.json({ code: 'not_implemented' }, { status: 501 })
 })
 
+const METHODS = { GET: http.get, PUT: http.put, PATCH: http.patch, POST: http.post, DELETE: http.delete } as const
+
+function unavailable(operation: string): HttpHandler {
+  const [method, path] = operation.split(' ')
+  return METHODS[method as keyof typeof METHODS](path, route(() => {
+    throw new DemoError('demo_unavailable', 501)
+  }))
+}
+
 export const handlers: HttpHandler[] = [
   http.get('/api/version', route(() => ({ version: 'demo', build_date: __DEMO_BUILD_DATE__ }))),
   http.get('/api/auth/status', route(() => ({ enabled: false, authenticated: true }))),
@@ -137,5 +154,6 @@ export const handlers: HttpHandler[] = [
   http.get('/api/whats-new', route(() => store.whatsNew())),
   http.post('/api/whats-new/seen', route(async ({ request }) => store.markWhatsNewSeen(await body<WhatsNewSeenIn>(request)))),
   http.put('/api/settings', route(async ({ request }) => store.saveSettings(await body<SettingsIn>(request)))),
+  ...Object.keys(UNAVAILABLE_IN_DEMO).map(unavailable),
   unhandledHandler,
 ]

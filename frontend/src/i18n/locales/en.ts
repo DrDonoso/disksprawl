@@ -256,7 +256,7 @@ export const en = {
   },
   settings: {
     title: 'Settings',
-    tabs: { directories: 'Directories', general: 'General' },
+    tabs: { directories: 'Directories', general: 'General', notifications: 'Notifications' },
     directoriesIntro: 'Each directory has its own schedule and scan method. Their order is the order of the menu.',
     add: 'Add directory',
     paused: 'paused',
@@ -297,6 +297,40 @@ export const en = {
     timezone: 'Server time zone: {timezone} (the TZ variable).',
     saved: 'Settings saved.',
     version: 'DiskSprawl {version}',
+  },
+  notifications: {
+    intro: 'DiskSprawl can notify this browser or phone, even when it is closed. Each device chooses its own notifications.',
+    device: 'Notifications on this device',
+    deviceHint: 'The browser asks for permission the first time.',
+    choices: 'Notify me when',
+    kinds: {
+      manual_scans: {
+        label: 'A scan started with "Scan now" finishes',
+        description: 'With its size and how much it changed since the previous scan.',
+      },
+      scheduled_scans: {
+        label: 'A scheduled scan finishes',
+        description: 'Off by default: they usually run at night.',
+      },
+      failed_scans: {
+        label: 'A scan fails or is interrupted',
+        description: 'With the reason, such as a folder that is not mounted.',
+      },
+      capacity: {
+        label: 'A volume is nearly full',
+        description: 'When its use reaches the warning or the critical threshold of the General tab.',
+      },
+    },
+    perDevice: 'These choices are this device\'s: every browser or phone makes its own.',
+    loadError: 'The notifications of this device could not be loaded.',
+    retry: 'Try again',
+    unavailable: {
+      demo: 'The demo has no server, so it sends no notifications. Install DiskSprawl to get them.',
+      insecure: 'Browsers only offer notifications to sites opened over HTTPS, or on this same computer. Open DiskSprawl at an HTTPS address, for example through a reverse proxy.',
+      install: 'To get notifications on an iPhone or iPad, add DiskSprawl to the Home Screen (Share → Add to Home Screen) and open it from there.',
+      unsupported: 'This browser has no notifications.',
+      denied: 'Notifications from DiskSprawl are blocked on this device: allow them in the settings of the browser or of the system.',
+    },
   },
   auth: {
     title: 'DiskSprawl',
@@ -362,6 +396,8 @@ export const en = {
       invalid_exclude: 'Patterns use names, * and ?, without / \\ [ or ].',
       too_many_excludes: 'Too many patterns (50 at most).',
       demo_unavailable: 'This needs a real server, so it is not available in the demo.',
+      push_service_unsupported: 'This browser uses a notification service DiskSprawl does not send to: use Chrome, Edge, Firefox or Safari.',
+      push_subscription_not_found: 'The server had forgotten this device. It is registered again: check its notifications.',
     },
   },
   demo: {

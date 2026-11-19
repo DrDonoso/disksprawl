@@ -9,6 +9,7 @@ import { Home, NotFound } from './components/Home'
 import { Login } from './components/Login'
 import { Shell } from './components/Shell'
 import { Notice } from './components/ui'
+import { PushProvider } from './push/PushContext'
 
 function CrashNotice() {
   const { t } = useI18n()
@@ -48,13 +49,15 @@ export function App({ chrome }: { chrome?: ReactNode }) {
       <BrowserRouter>
         <Boundary>
           <AuthGate>
-            <Routes>
-              <Route element={<Shell banner={chrome} />}>
-                <Route index element={<Home />} />
-                <Route path="directories/:id" element={<DirectoryPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Routes>
+            <PushProvider>
+              <Routes>
+                <Route element={<Shell banner={chrome} />}>
+                  <Route index element={<Home />} />
+                  <Route path="directories/:id" element={<DirectoryPage />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
+            </PushProvider>
           </AuthGate>
         </Boundary>
       </BrowserRouter>

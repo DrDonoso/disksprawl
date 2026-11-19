@@ -51,9 +51,9 @@ is invented.
 - The folder picker browses an invented `/data` with the four directories and a couple of other
   folders.
 - The server's time zone is the browser's.
-- Nothing needs a real server, so every part of the interface is available. If an API operation is
-  ever added that the demo cannot answer, it replies with a clear "not available in the demo"
-  error.
+- There are no notifications: there is no server to send them. **⚙ Settings → Notifications**
+  says so, and the API's notification operations reply with a clear "not available in the demo"
+  error. Everything else works.
 
 ## Running it locally
 
@@ -100,9 +100,10 @@ only some images. Optimize them losslessly before committing them, for example w
   in-memory store (`frontend/src/demo/`). The handlers use the generated API types and mirror the
   backend's validation and error codes. A request nobody handles gets a `501` and a console
   error, and a unit test fails if an API operation has neither a handler nor an explicit "not
-  available in the demo" answer.
+  available in the demo" answer (`UNAVAILABLE_IN_DEMO` in `handlers.ts`, with the reason).
 - Production builds contain no demo code: `main.tsx` loads it only behind a build-time check, and
-  `mockServiceWorker.js` is removed from `dist/`.
+  `mockServiceWorker.js` is removed from `dist/`. The demo, in turn, ships without the service
+  worker of the notifications (`sw.js`).
 - The static host gets a `_headers` file with the backend's security headers and Content Security
   Policy, plus `worker-src 'self'` for the service worker.
 

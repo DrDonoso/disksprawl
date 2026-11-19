@@ -239,6 +239,9 @@ server {
 
 Requests are small: bodies over 64 KiB are refused, so the proxy needs no special limits.
 
+HTTPS is also what browsers require to offer [notifications](configuration.md#notifications):
+once DiskSprawl is opened at its HTTPS address, **⚙ Settings → Notifications** can turn them on.
+
 ## Releases and updating
 
 Each release is published to Docker Hub as `drdonoso/disksprawl:latest` and as a CalVer tag
@@ -307,3 +310,8 @@ whether the container is healthy.
 | The volume card of a share stops updating, and the log says a volume "did not answer" | The NAS was off or did not answer within 10 seconds; the volume is measured again once it answers. |
 | Folder names show `\xNN` escapes | Those names are not UTF-8 (Latin-1, for example); see [names that are not UTF-8](engines.md#names-that-are-not-utf-8). |
 | A scan takes much longer than before | Compare the engine and options in the history; a pace or thread change, or a busy NAS, explain most cases. |
+| **⚙ Settings → Notifications** says browsers need HTTPS | DiskSprawl was opened over plain HTTP at an address other than `localhost`: open it at an HTTPS address, through a [reverse proxy](#reverse-proxy-and-https). |
+| **⚙ Settings → Notifications** asks to add DiskSprawl to the Home Screen | An iPhone or iPad only gets notifications in the app added to the Home Screen (iOS 16.4 or later): Safari's **Share → Add to Home Screen**, then open it from there. |
+| It says notifications are blocked | They were refused when the browser asked: allow them in **Settings → Notifications → DiskSprawl** (iPhone), the app's **App info → Notifications** (Android) or the site's settings next to the address bar (computers). |
+| "This browser uses a notification service DiskSprawl does not send to" | The browser uses a push service other than Apple's, Google's, Mozilla's or Microsoft's (some browsers without Google services): use Chrome, Edge, Firefox or Safari. |
+| No notification arrives | Check the device's choices in **⚙ Settings → Notifications**: scheduled scans are off by default, and a volume is told once per threshold. With a password, signing out on the device pauses them. Check Do Not Disturb or Focus, and the logs: `Push message not sent to … (URLError)` means the container cannot reach the push services (see [notifications](configuration.md#notifications)). |
