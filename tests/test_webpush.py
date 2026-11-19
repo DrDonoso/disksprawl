@@ -175,7 +175,9 @@ def test_what_each_answer_means(
     # The address of a subscription is never logged, only its push service (and its reason).
     assert browser.endpoint not in caplog.text
     if outcome in {"retry", "rejected"}:
-        assert "fcm.googleapis.com" in caplog.text
+        assert [record.args[0] for record in caplog.records if record.args] == [
+            webpush.push_service(browser.endpoint)
+        ]
     if status in {400, 403, 413}:
         assert "TestRefusal" in caplog.text
 
