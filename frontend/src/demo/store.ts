@@ -13,6 +13,7 @@ import {
   snapshot, type Entry, type Model,
 } from './model'
 import { random } from './random'
+import { scanLog } from './scanLog'
 
 /** A what's new note's id (NoteId of the API). */
 const NOTE_ID = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/
@@ -31,7 +32,7 @@ interface DemoDirectory {
   model: Model
 }
 
-interface DemoScan extends Omit<ScanOut, 'has_detail'> {
+interface DemoScan extends Omit<ScanOut, 'has_detail' | 'has_log'> {
   /** Simulated scans: when the queue started it, and how long it runs (ms). */
   run?: { start: number; length: number }
 }
@@ -40,6 +41,7 @@ export const ROOT = '/data'
 const MIB = 2 ** 20
 const SCAN_SECONDS = 7
 const KEEP_SCANS_DEFAULT = 30
+const SCAN_LOG_DAYS_DEFAULT = 30
 const MAX_THREADS: Readonly<Record<Engine, number>> = { native: 16, du: 1, ncdu: 16, gdu: 8 }
 const SAMPLE_EVERY = 15 * 60_000
 const BIGGEST_CHANGES = 10
@@ -96,6 +98,7 @@ export class DemoStore {
   private whatsNewSeen: string[] | null = null
   settings: Omit<SettingsOut, 'timezone'> = {
     capacity_interval_minutes: 15, keep_scans: KEEP_SCANS_DEFAULT, min_entry_mib: 1, warn_percent: 80, critical_percent: 90,
+    scan_log_days: SCAN_LOG_DAYS_DEFAULT,
   }
 
   constructor({ now = Date.now }: StoreOptions = {}) {
@@ -385,7 +388,27 @@ export class DemoStore {
   out(scan: DemoScan): ScanOut {
     const { run: _run, ...rest } = scan
     const detail = scan.status === 'completed' && this.detailed(scan.directory_id).includes(scan)
-    return { ...rest, has_detail: detail }
+    return { ...rest, has_detail: detail, has_log: this.hasLog(scan) }
+  }
+
+  /** Every scan that started has a log, until `scan_log_days` days after it ended. */
+  private hasLog(scan: DemoScan): boolean {
+    if (scan.started_at === null) return false
+    return scan.finished_at === null || Date.parse(scan.finished_at) >= this.clock() - this.settings.scan_log_days * DAY
+  }
+
+  /** A scan's log file, as the server writes it: the name it downloads as, and its text. */
+  scanLog(id: number): { name: string; text: string } {
+    this.tick()
+    const scan = this.scans.find(item => item.id === id)
+    if (!scan) throw new DemoError('scan_not_found', 404)
+    if (!this.hasLog(scan)) throw new DemoError('scan_log_not_found', 404)
+    const { directory } = this.get(scan.directory_id)
+    return scanLog({
+      scan: this.out(scan), directory, engine: ENGINES.find(engine => engine.id === scan.engine),
+      minMib: this.settings.min_entry_mib, zone: this.timezone,
+      stored: scan.status === 'completed' ? this.folders(scan.directory_id, scan).size : null,
+    })
   }
 
   scan(id: number): ScanOut {
@@ -622,6 +645,7 @@ export class DemoStore {
   saveSettings(body: SettingsIn): SettingsOut {
     const limits: Readonly<Record<keyof SettingsIn, [number, number]>> = {
       capacity_interval_minutes: [1, 1440], keep_scans: [1, 1000], min_entry_mib: [1, 1024], warn_percent: [1, 99], critical_percent: [2, 100],
+      scan_log_days: [1, 3650],
     }
     const fields: Record<string, string> = {}
     for (const [key, [low, high]] of Object.entries(limits)) {

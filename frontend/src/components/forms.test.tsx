@@ -2,15 +2,36 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import type { DemoStore } from '../demo/store'
 import { DirectoryForm } from './DirectoryForm'
+import { GeneralSettings } from './GeneralSettings'
 import { Login } from './Login'
 import { Shell } from './Shell'
 import { renderWithProviders, resetApi, server } from '../test/render'
 
+let demo: DemoStore
+
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
-beforeEach(() => { resetApi() })
+beforeEach(() => { demo = resetApi() })
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
+
+describe('the general settings', () => {
+  test('choose how many days scan logs are kept, from 1 to 3650', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<GeneralSettings />)
+    const days = await screen.findByLabelText('Days scan logs are kept')
+    expect(days).toHaveValue(30)
+    expect(days).toHaveAttribute('min', '1')
+    expect(days).toHaveAttribute('max', '3650')
+    expect(screen.getByRole('button', { name: 'About Days scan logs are kept' })).toHaveAccessibleDescription(/every folder it could not read/)
+    await user.clear(days)
+    await user.type(days, '7')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Settings saved.')).toBeInTheDocument()
+    expect(demo.settings.scan_log_days).toBe(7)
+  })
+})
 
 describe('the directory form', () => {
   test('new directories start with the defaults, and every option explains itself', async () => {

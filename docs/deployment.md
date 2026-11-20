@@ -56,13 +56,15 @@ Keep those settings.
 ## What happens at startup
 
 1. The database in the `data` volume is created or migrated to the current version.
-2. Scans that were running when the container stopped are recorded as **interrupted**; queued
-   scans stay in the queue.
+2. Scans that were running when the container stopped are recorded as **interrupted**, and their
+   logs say so; queued scans stay in the queue.
 3. Each engine is detected with its version; a missing one appears disabled in the settings.
-4. The schedules are loaded, the capacity of every volume is measured, and a scheduled scan
-   missed by less than an hour (during an update, for example) is queued.
+4. The schedules are loaded, the capacity of every volume is measured, scan logs older than the
+   days set in **⚙ Settings → General** are deleted, and a scheduled scan missed by less than an
+   hour (during an update, for example) is queued.
 
-`docker compose logs -f app` shows each step and every scan.
+`docker compose logs -f app` shows each step and every scan. Each scan also writes its own
+[log file](configuration.md#scan-logs), which lists every folder it could not read.
 
 ## Permissions
 
@@ -70,7 +72,8 @@ The container runs as **user 1000** (group 1000) and only reads. To measure a fo
 able to **list every folder** below it: directories need read and execute permission (`r-x`) for
 that user, its group or everyone. Files do not need to be readable: their size comes from their
 metadata. Anything the user cannot list is left out of the totals and reported as an error of the
-scan ("completed with N errors"), with the paths that failed in the scan's details.
+scan ("completed with N errors"), with the paths that failed in the scan's details and every one of
+them in its [log](configuration.md#scan-logs).
 
 Check it from the host, as user 1000:
 
@@ -263,8 +266,8 @@ newer release migrated the database, restore the backup taken before updating.
 ## Backup and restore
 
 Everything DiskSprawl stores is in the `data` volume (`disksprawl_data`): the SQLite database with
-the directories, settings and scan history, and the generated session key. The analyzed folders
-are never written and are not part of it.
+the directories, settings and scan history, the scans' log files (`logs/`), and the generated
+session key. The analyzed folders are never written and are not part of it.
 
 ### Backup
 
@@ -303,7 +306,7 @@ whether the container is healthy.
 | "The folder must be inside /data" | Directories are folders inside the container: mount the folder under `/data` and use that path. |
 | "This folder does not exist (it may not be mounted)" | The bind mount is missing, or the share is not mounted on the host (or on the Proxmox host). Check with `docker compose exec app ls /data`. |
 | "This folder cannot be read: check its permissions" | User 1000 cannot list it: see [permissions](#permissions). |
-| A scan "completed with N errors" | Some folders could not be listed: the scan's details list them. Usually permissions, or files removed while scanning. |
+| A scan "completed with N errors" | Some folders could not be listed: the scan's details list a sample, and its log (the **Log** column of the latest scans) lists every one. Usually permissions, or files removed while scanning. |
 | An engine is disabled in the settings | It was not found or did not answer `--version`: the log says why. The official image includes all four. |
 | The volume size differs from the NAS | Over SMB or NFS the NAS reports the share's capacity, which may be a quota. |
 | The NAS is slow during scans | Use fewer threads and the *Balanced* or *Gentle* pace, or schedule the scan at night. |

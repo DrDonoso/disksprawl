@@ -26,6 +26,7 @@ const PATHS = {
   sparkles: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.7 1.8L21.5 18.5l-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z',
   trending: 'M3 17l6-6 4 4 8-8M15 7h6v6',
   tool: 'M14.7 6.3a4 4 0 0 0-5 5L3 18l3 3 6.7-6.7a4 4 0 0 0 5-5l-2.4 2.4-2.6-.6-.6-2.6z',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
 } as const
 
 export type IconName = keyof typeof PATHS

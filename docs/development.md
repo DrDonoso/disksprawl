@@ -38,6 +38,7 @@ src/disksprawl/          FastAPI application
   api.py, schemas.py     HTTP API and its request and response models
   queries.py             tree, changes and history queries
   scanning.py            scan queue, worker processes, results, retention
+  scan_logs.py           the log file of each scan, and its expiry
   scheduler.py, cron.py  schedules (APScheduler) and cron expressions
   capacity.py, paths.py  volume capacity (statvfs) and the /data boundary
   notifications.py       notifications: what each device is told, queued and sent in rounds
@@ -254,7 +255,7 @@ token with permission to push to the repository. Forks build and test, but never
 
 | Variable | Used by | Purpose |
 | --- | --- | --- |
-| `DATA_DIR` | backend | Folder of the database and the session key (`data`). |
+| `DATA_DIR` | backend | Folder of the database, the scans' logs and the session key (`data`). |
 | `SCAN_ROOT` | backend | Folder every directory must be inside (`/data`). |
 | `FRONTEND_DIR` | backend | Built web interface served at `/` (`frontend/dist`). |
 | `E2E_PORT`, `E2E_BASE_URL` | `npm run e2e` | Port of the test server (7889), or another, empty server to test. |

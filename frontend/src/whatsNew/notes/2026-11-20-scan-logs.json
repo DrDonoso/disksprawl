@@ -1,0 +1,11 @@
+{
+  "kind": "new",
+  "en": {
+    "title": "A log file for every scan",
+    "body": "Each scan writes a log with its options, how it ended and every folder it could not read. Download it from the latest scans or the scan's errors; Settings → General sets how many days logs are kept."
+  },
+  "es": {
+    "title": "Un fichero de log de cada escaneo",
+    "body": "Cada escaneo escribe un log con sus opciones, cómo terminó y todas las carpetas que no pudo leer. Descárgalo desde los últimos escaneos o los errores del escaneo; en Ajustes → General eliges cuántos días se guardan."
+  }
+}

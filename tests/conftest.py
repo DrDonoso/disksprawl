@@ -80,8 +80,10 @@ def client(settings: Settings) -> Iterator[TestClient]:
         yield test_client
 
 
-def fake_worker(tmp_path: Path, *, seconds: float = 0.0, fail: bool = False) -> list[str]:
-    """A scripted scan worker: progress for `seconds`, then a two-folder result (or a failure)."""
+def fake_worker(tmp_path: Path, *, seconds: float = 0.0, fail: bool = False,
+                errors: int = 0) -> list[str]:
+    """A scripted scan worker: progress for `seconds`, then a two-folder result (or a failure),
+    reporting `errors` unreadable folders on the way."""
     script = tmp_path / "fake_worker.py"
     script.write_text(
         f"""
@@ -95,6 +97,10 @@ while time.monotonic() < end:
                       "files": done * 10, "bytes": done * 1000, "current": f"folder-{{done}}"}}),
           flush=True)
     time.sleep(0.05)
+errors = [{{"path": f"folder-{{number}}", "message": "Permission denied"}}
+          for number in range({errors})]
+for error in errors:
+    print(json.dumps({{"type": "scan_error", **error}}), flush=True)
 if {fail}:
     print(json.dumps({{"type": "error", "code": "engine_failed", "detail": "boom"}}), flush=True)
     sys.exit(1)
@@ -102,16 +108,19 @@ with open(job["result_path"], "w") as handle:
     handle.write(json.dumps([0, -1, "", 3000, 3, 1]) + "\\n")
     handle.write(json.dumps([1, 0, "child", 2000, 2, 0]) + "\\n")
 print(json.dumps({{"type": "done", "total_bytes": 3000, "file_count": 3, "dir_count": 1,
-                  "entries": 2, "error_count": 0, "error_sample": []}}), flush=True)
+                  "entries": 2, "error_count": len(errors), "error_sample": errors[:20]}}),
+      flush=True)
 """
     )
     return [sys.executable, str(script)]
 
 
 def wait_idle(client: TestClient, timeout: float = 60) -> None:
+    """Waits until no scan is queued or running, and the last one has finished its log."""
+    scanner = client.app.state.scanner  # type: ignore[attr-defined]
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not client.get("/api/queue").json()["items"]:
+        if not client.get("/api/queue").json()["items"] and scanner.live() is None:
             return
         time.sleep(0.05)
     raise AssertionError("The scan queue did not empty in time")

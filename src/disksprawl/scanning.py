@@ -3,7 +3,7 @@
 Scans wait in the database (`queued`), so they survive a restart; a scan that was running when the
 app stopped becomes `interrupted`. While a scan runs, its live counters stay in memory and the API
 reads them, with an estimate from the folders and files of the previous completed scan of the same
-directory.
+directory. Each scan that starts writes its log file (scan_logs.py).
 """
 
 import json
@@ -21,22 +21,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import capacity, retention, settings_store
+from . import capacity, retention, scan_logs, settings_store
 from .config import Settings
 from .db import Directory, Scan, transaction, utcnow
 from .engines import EngineInfo
 from .engines.common import Job, clean, read_result
 from .errors import AppError
-from .paths import resolve
+from .paths import is_text, resolve
+from .scan_logs import ScanLog, ScanLogs
 
 log = logging.getLogger(__name__)
 
 ACTIVE = ("queued", "running")
 MIB = 1024 * 1024
+# Scans whose expired log is forgotten in each transaction.
+LOG_BATCH = 500
 # Seconds a cancelled worker gets to stop before it is killed.
 STOP_GRACE = 5.0
 # Storing a finished scan is tried this many times while the database stays busy (each attempt
@@ -89,6 +92,7 @@ class Live:
     previous: Previous | None = None
     process: subprocess.Popen[bytes] | None = None
     cancel: bool = False
+    log: ScanLog | None = None
 
     def estimate(self, elapsed: float) -> tuple[float | None, float | None]:
         """(share done, seconds left), both approximate; None when they cannot be estimated.
@@ -143,6 +147,7 @@ class Scanner:
         self.engines = engines
         self.on_finished = on_finished
         self.work_dir = config.data_dir / "work"
+        self.logs = ScanLogs(config.logs_dir, config.zone)
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._lock = threading.Lock()
@@ -164,8 +169,19 @@ class Scanner:
         for leftover in self.work_dir.iterdir():
             leftover.unlink(missing_ok=True)
         with transaction(self.sessions) as db:
-            for scan in db.scalars(select(Scan).where(Scan.status == "running")):
+            interrupted = list(db.scalars(select(Scan).where(Scan.status == "running")))
+            for scan in interrupted:
                 self._close(scan, "interrupted", "interrupted")
+        # Their logs end too, once the transaction is over.
+        for scan in interrupted:
+            if scan.log_file is not None:
+                scan_log = self.logs.reopen(scan.id, scan.log_file)
+                try:
+                    scan_log.end(scan)
+                except Exception:
+                    log.exception("The log of scan %s could not be ended", scan.id)
+                finally:
+                    scan_log.close()
         self._thread = threading.Thread(target=self._loop, name="scanner", daemon=True)
         self._thread.start()
 
@@ -238,9 +254,42 @@ class Scanner:
         with self._storage_lock:
             retention.prune(self.sessions, directory_id, keep)
 
+    def sweep_logs(self, days: int) -> int:
+        """Deletes the logs of the scans that ended more than `days` days ago; how many. Each
+        batch of scans forgets its logs before the files go: a failure deletes nothing they
+        still point to, and the next sweep finds the files again."""
+        with self.sessions() as db:
+            keep = {
+                name
+                for name in db.scalars(
+                    select(Scan.log_file).where(
+                        Scan.status.in_(ACTIVE), Scan.log_file.is_not(None)
+                    )
+                )
+                if name
+            }
+        # The scan the worker thread runs keeps its log until it has written its end, even once
+        # its record says it ended. Read after the query: a scan that was live then still is, or
+        # has written its end since.
+        live = self._live
+        if live is not None and live.log is not None and live.log.relative:
+            keep.add(live.log.relative)
+        expired = self.logs.expired(days, keep, time.time())
+        for start in range(0, len(expired), LOG_BATCH):
+            batch = expired[start : start + LOG_BATCH]
+            with transaction(self.sessions) as db:
+                db.execute(
+                    update(Scan)
+                    .where(Scan.log_file.in_([name for name in batch if is_text(name)]))
+                    .values(log_file=None)
+                )
+            self.logs.delete(batch)
+        self.logs.remove_empty_folders()
+        return len(expired)
+
     def forget(self, directory_id: int) -> None:
         """Deletes a directory and everything stored about it (never its files): its queued and
-        running scans stop first, then its records go in batches."""
+        running scans stop first, then its records go in batches, and its scans' logs."""
         with self._lock, transaction(self.sessions) as db:
             for scan in db.scalars(
                 select(Scan).where(Scan.directory_id == directory_id, Scan.status.in_(ACTIVE))
@@ -254,7 +303,16 @@ class Scanner:
             live.cancel = True
             self._terminate(live)
         with self._storage_lock:
+            with self.sessions() as db:
+                logs = [
+                    name
+                    for name in db.scalars(
+                        select(Scan.log_file).where(Scan.directory_id == directory_id)
+                    )
+                    if name
+                ]
             retention.delete_directory(self.sessions, directory_id)
+        self.logs.delete(logs)
 
     def _stale(self, scan: Scan) -> bool:
         """A scan marked running that the worker thread is not running (call with `_lock` held)."""
@@ -290,6 +348,9 @@ class Scanner:
             log.exception("Scan %s failed unexpectedly", scan_id)
             self._fail(scan_id, "internal_error")
         finally:
+            live = self._live
+            if live is not None and live.log is not None and live.log.open:
+                self._end_log(scan_id, live.log)
             with self._lock:
                 self._live = None
                 self._current = None
@@ -366,6 +427,40 @@ class Scanner:
             prefix += [ionice, "-c", "3", "-t"]
         return prefix + command
 
+    def _open_log(
+        self, about: scan_logs.About, engine: EngineInfo | None, min_mib: int
+    ) -> ScanLog:
+        """Creates the scan's log, with its header, and records its name (outside any write
+        transaction but that short one). Whatever fails here, the scan runs all the same."""
+        scan_log = self.logs.create(about)
+        if not scan_log.open:
+            return scan_log
+        try:
+            scan_log.write(*scan_logs.header(about, engine, min_mib, self.config.image_tag))
+            scan_log.event("Queued", about.queued_at)
+            scan_log.event("Started", about.started_at)
+            with transaction(self.sessions) as db:
+                db.execute(
+                    update(Scan).where(Scan.id == about.scan_id).values(log_file=scan_log.relative)
+                )
+        except Exception:
+            # Unrecorded, the log expires like any other.
+            log.exception("The log of scan %s could not be started", about.scan_id)
+        return scan_log
+
+    def _end_log(self, scan_id: int, scan_log: ScanLog) -> None:
+        """Writes how the scan ended, and closes its log. A scan still marked running (the app is
+        stopping and could not record its end) gets its end when the app starts again."""
+        try:
+            with self.sessions() as db:
+                scan = db.get(Scan, scan_id)
+            if scan is not None and scan.status not in ACTIVE:
+                scan_log.end(scan)
+        except Exception:
+            log.exception("The log of scan %s could not be ended", scan_id)
+        finally:
+            scan_log.close()
+
     def _run(self, scan_id: int) -> None:
         with self.sessions() as db:
             scan = db.get(Scan, scan_id)
@@ -377,6 +472,16 @@ class Scanner:
             options = dict(scan.options)
             path = directory.path
             directory_id = directory.id
+            about = scan_logs.About(
+                scan_id,
+                directory_id,
+                directory.name,
+                path,
+                scan.trigger,
+                options,
+                scan.queued_at,
+                scan.started_at or utcnow(),
+            )
             min_mib = settings_store.load(db)["min_entry_mib"]
             reference = db.scalars(
                 select(Scan)
@@ -389,6 +494,7 @@ class Scanner:
                 else None
             )
         engine_id = str(options["engine"])
+        engine = self.engines().get(engine_id)
         live = Live(
             scan_id,
             directory_id,
@@ -399,6 +505,7 @@ class Scanner:
             files=None if engine_id == "du" else 0,
         )
         self._live = live
+        live.log = self._open_log(about, engine, min_mib)
         if scan_id in self._cancel_requests or self._stopping.is_set():
             self._fail(scan_id, "", "interrupted" if self._stopping.is_set() else "cancelled")
             return
@@ -407,7 +514,6 @@ class Scanner:
         except AppError as error:
             self._fail(scan_id, error.code)
             return
-        engine = self.engines().get(engine_id)
         if engine is None or not engine.available:
             self._fail(scan_id, "engine_unavailable")
             return
@@ -435,6 +541,11 @@ class Scanner:
             else:
                 live.phase = "saving"
                 keep = self._store_patiently(scan_id, directory_id, path, result_path, outcome)
+                if live.log is not None:
+                    entries = outcome.get("entries")
+                    live.log.stored = entries if isinstance(entries, int) else None
+                    # Its end now: pruning a large history can take minutes.
+                    self._end_log(scan_id, live.log)
                 if keep is not None:
                     try:
                         self.prune(directory_id, keep)
@@ -492,6 +603,9 @@ class Scanner:
                 live.current = message.get("current")
             elif kind == "done":
                 done = message
+            elif kind == "scan_error":
+                if live.log is not None:
+                    live.log.error(str(message.get("path", "")), str(message.get("message", "")))
             elif kind == "error":
                 failure = str(message.get("code", "scan_failed"))
                 detail = message.get("detail")
@@ -509,6 +623,8 @@ class Scanner:
         reader.join(timeout=5)
         if done is not None and process.returncode == 0:
             return done, ""
+        if live.log is not None:
+            live.log.tail = list(tail)
         if not failure:
             details = " | ".join(line for line in tail[-3:] if line)
             failure = f"scan_failed: exit status {process.returncode}" + (

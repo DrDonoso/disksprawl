@@ -17,6 +17,8 @@ DEFAULTS: dict[str, int] = {
     # Volume usage that shows a warning, and a critical alert.
     "warn_percent": 80,
     "critical_percent": 90,
+    # Days each scan's log file is kept after the scan ends (scan_logs.py).
+    "scan_log_days": 30,
 }
 LIMITS: dict[str, tuple[int, int]] = {
     "capacity_interval_minutes": (1, 1440),
@@ -24,6 +26,7 @@ LIMITS: dict[str, tuple[int, int]] = {
     "min_entry_mib": (1, 1024),
     "warn_percent": (1, 99),
     "critical_percent": (2, 100),
+    "scan_log_days": (1, 3650),
 }
 
 

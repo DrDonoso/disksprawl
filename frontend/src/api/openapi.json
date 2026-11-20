@@ -1347,6 +1347,10 @@
             "title": "Has Detail",
             "type": "boolean"
           },
+          "has_log": {
+            "title": "Has Log",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -1434,7 +1438,8 @@
           "capacity_total",
           "capacity_used",
           "capacity_free",
-          "has_detail"
+          "has_detail",
+          "has_log"
         ],
         "title": "ScanOut",
         "type": "object"
@@ -1466,6 +1471,12 @@
             "title": "Min Entry Mib",
             "type": "integer"
           },
+          "scan_log_days": {
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Scan Log Days",
+            "type": "integer"
+          },
           "warn_percent": {
             "maximum": 99.0,
             "minimum": 1.0,
@@ -1478,7 +1489,8 @@
           "keep_scans",
           "min_entry_mib",
           "warn_percent",
-          "critical_percent"
+          "critical_percent",
+          "scan_log_days"
         ],
         "title": "SettingsIn",
         "type": "object"
@@ -1501,6 +1513,10 @@
             "title": "Min Entry Mib",
             "type": "integer"
           },
+          "scan_log_days": {
+            "title": "Scan Log Days",
+            "type": "integer"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "string"
@@ -1516,6 +1532,7 @@
           "min_entry_mib",
           "warn_percent",
           "critical_percent",
+          "scan_log_days",
           "timezone"
         ],
         "title": "SettingsOut",
@@ -2627,6 +2644,45 @@
           }
         },
         "summary": "Cancel Scan"
+      }
+    },
+    "/api/scans/{scan_id}/log": {
+      "get": {
+        "operationId": "scan_log_api_scans__scan_id__log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "title": "Scan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scan Log"
       }
     },
     "/api/settings": {

@@ -13,9 +13,11 @@ const FIELDS = [
   { key: 'min_entry_mib', min: 1, max: 1024 },
   { key: 'warn_percent', min: 1, max: 99 },
   { key: 'critical_percent', min: 2, max: 100 },
+  { key: 'scan_log_days', min: 1, max: 3650 },
 ] as const
 
-/** Capacity sampling, history kept, the smallest folder stored and the thresholds. */
+/** Capacity sampling, history kept, the smallest folder stored, the thresholds and how long scan
+ * logs are kept. */
 export function GeneralSettings() {
   const { t } = useI18n()
   const settings = useSettings()

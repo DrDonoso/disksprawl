@@ -1,8 +1,9 @@
 """Scan worker: `python -m disksprawl.engines JOB.json`.
 
-Runs one scan with the job's engine, prints JSON lines on stdout (`progress` every half second, then
-`done` or `error`) and writes the folders of the scan to the job's result file. The server starts
-it at low priority when the directory asks for it (nice, ionice) and stops it with SIGTERM.
+Runs one scan with the job's engine, prints JSON lines on stdout (`progress` every half second, a
+`scan_error` for each path it cannot read, then `done` or `error`) and writes the folders of the
+scan to the job's result file. The server starts it at low priority when the directory asks for it
+(nice, ionice) and stops it with SIGTERM.
 """
 
 import fcntl
@@ -113,8 +114,9 @@ def run_external(
         raise EngineFailed(f"exit status {child.returncode}" + (f": {detail}" if detail else ""))
 
 
-def run(job: Job) -> tuple[Tree, ErrorLog, Progress]:
-    errors = ErrorLog()
+def run(job: Job, errors: ErrorLog | None = None) -> tuple[Tree, ErrorLog, Progress]:
+    if errors is None:
+        errors = ErrorLog()
     if job.engine == "native":
         progress = Progress()
         tree = Tree()
@@ -198,8 +200,12 @@ def main(argv: list[str]) -> int:
     signal.signal(signal.SIGTERM, terminate)
     job = Job.load(argv[1])
     out = Progress()
+    # Each path that cannot be read, as it happens: the server lists them in the scan's log.
+    reported = ErrorLog(
+        lambda path, message: out.emit({"type": "scan_error", "path": path, "message": message})
+    )
     try:
-        tree, errors, progress = run(job)
+        tree, errors, progress = run(job, reported)
         progress.phase = "finishing"
         result = tree.finalize(job.min_entry_bytes)
         result.write(job.result_path)

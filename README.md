@@ -92,6 +92,9 @@ and exactly which folders grew or shrank between two scans. It only ever reads y
 - **History** charts of each directory's size and of its volume's use over 30, 90 or 365 days,
   and the latest scans with their engine, duration and errors. A point of the size chart or the
   date of a scan opens that scan in the treemap.
+- **A log file of every scan**: its options, when it was queued, started and ended, how it ended
+  and every folder it could not read, downloaded from the latest scans and kept 30 days (or as
+  many as you choose) in the data volume.
 - **Notifications** on your phone or computer, even with DiskSprawl closed: when a scan finishes
   (with its size and how much it changed) or fails, and when a volume reaches the warning or the
   critical threshold. Each browser or phone chooses which ones it gets. They need DiskSprawl opened
@@ -149,7 +152,7 @@ flowchart LR
   from slowing down the interface, whatever the engine.
 - The engine's output is reduced to the folders worth keeping (1 MiB or more by default) and
   stored in SQLite with the totals, so the treemap, the changes and the history are queries, not
-  new scans.
+  new scans. Each scan also writes a log file, with every folder it could not read.
 - Notifications use Web Push: each one is encrypted for the device that asked for it and sent
   through its browser's push service (Apple, Google, Mozilla or Microsoft), the only connections
   DiskSprawl makes.
@@ -216,8 +219,8 @@ Releases are published as `latest` and as a CalVer tag such as `20261115` (see t
 [releases](https://github.com/DrDonoso/disksprawl/releases)). To update only when you decide, set
 `IMAGE_TAG` in `.env` to a release. Database migrations run on start.
 
-Everything DiskSprawl stores is in the `data` volume: the database with the scan history, and the
-session key. To back it up, copy the volume while the app is stopped:
+Everything DiskSprawl stores is in the `data` volume: the database with the scan history, the
+scans' log files and the session key. To back it up, copy the volume while the app is stopped:
 
 ```bash
 docker compose stop
@@ -248,10 +251,11 @@ describes each one.
 
 The schedules and scan methods of each directory, the capacity measurement interval, how many
 scans keep their folders (30 per directory), the smallest folder stored (1 MiB), the volume
-thresholds (80 % and 90 %) are set in the interface, under **⚙ Settings**, and so are the
-notifications of each device (**⚙ Settings → Notifications**; see
-[notifications](docs/configuration.md#notifications) for what they need). The language and the
-theme are chosen in the top bar, next to **⚙**, and each browser keeps its own.
+thresholds (80 % and 90 %) and how many days the scans' logs are kept (30) are set in the
+interface, under **⚙ Settings**, and so are the notifications of each device
+(**⚙ Settings → Notifications**; see [notifications](docs/configuration.md#notifications) for what
+they need). The language and the theme are chosen in the top bar, next to **⚙**, and each browser
+keeps its own.
 
 ## Scan engines
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { ApiError, errorMessage } from '../api/client'
-import { useOverview, useRefreshDirectory, useScanNow, useSettings } from '../api/hooks'
+import { useDownloadLog, useOverview, useRefreshDirectory, useScanNow, useSettings } from '../api/hooks'
 import type { DirectorySummaryOut, ScanOut } from '../api/schema.gen'
 import { useI18n } from '../i18n'
 import { failureReason } from '../lib/messages'
@@ -17,6 +17,7 @@ import styles from './DirectoryPage.module.css'
 
 export function ScanErrors({ scan }: { scan: ScanOut }) {
   const { t } = useI18n()
+  const downloadLog = useDownloadLog()
   if (!scan.error_count) return null
   return <details className={styles.errors}>
     <summary>{t('directory.withErrors', { count: scan.error_count })}</summary>
@@ -29,6 +30,11 @@ export function ScanErrors({ scan }: { scan: ScanOut }) {
     {scan.error_count > scan.error_sample.length && <p className="muted small">
       {t('directory.moreErrors', { count: scan.error_count - scan.error_sample.length })}
     </p>}
+    {scan.has_log && <button type="button" className={`button secondary small ${styles.errorsLog}`}
+      disabled={downloadLog.isPending} onClick={() => downloadLog.mutate(scan.id)}>
+      <Icon name="download" size={16} />{t('directory.errorsLog')}
+    </button>}
+    {downloadLog.error && <Notice error>{errorMessage(downloadLog.error)}</Notice>}
   </details>
 }
 

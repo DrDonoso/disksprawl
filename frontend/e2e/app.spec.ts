@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 // The real application with a synthetic sample tree (playwright.config.ts, scripts/smoke_server.py).
@@ -42,6 +43,16 @@ test('add a directory, scan it, explore the treemap and see what changed', async
   await page.getByRole('button', { name: 'Scan now' }).click()
   await expect(page.getByRole('main').getByText('Updated a few seconds ago')).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('navigation', { name: 'Directories' }).getByRole('link', { name: /Storage/ })).toContainText('Updated')
+
+  // The scan's log, from the latest scans: its directory, its events and how it ended.
+  const saving = page.waitForEvent('download')
+  await page.getByRole('region', { name: 'Latest scans' }).getByRole('button', { name: /^Download the log of the scan of / }).first().click()
+  const download = await saving
+  expect(download.suggestedFilename()).toMatch(/^Storage_\d{4}-\d\d-\d\d_\d{4}\.log$/)
+  const log = await readFile(await download.path(), 'utf8')
+  expect(log).toMatch(/^DiskSprawl .+: scan \d+\nDirectory: Storage \(id \d+\)\n/)
+  expect(log).toMatch(/ {2}Queued\n.+ {2}Started\n/)
+  expect(log).toMatch(/ {2}Completed in .+\n {2}Size: .+\n {2}Files: /)
 
   const treemap = page.getByRole('group', { name: 'Treemap of Storage' })
   await expect(treemap.getByRole('button', { name: /^Backups \d/ })).toBeVisible()

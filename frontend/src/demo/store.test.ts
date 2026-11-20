@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest'
+import { attachmentName } from '../api/client'
 import { NOW } from '../test/clock'
 import { DAY } from './model'
+import { contentDisposition, folderName, scanLog } from './scanLog'
 import { DemoError, DemoStore, biggestChanges } from './store'
 
 function store(now = NOW) {
@@ -144,6 +146,72 @@ describe('biggest changes', () => {
       { path: 'media/series', before: null, after: 550 },
       { path: 'old', before: 300, after: null },
     ])
+  })
+})
+
+describe('scan logs', () => {
+  test('every scan that started has one until it expires, written as the server writes it', () => {
+    const { demo } = store()
+    const backups = demo.summary(3).last_scan
+    if (!backups) throw new Error('no scan of Backups')
+    expect(backups.has_log).toBe(true)
+    const log = demo.scanLog(backups.id)
+    const started = new Date(backups.started_at as string).toISOString()
+    expect(log.name).toBe(`Backups_${started.slice(0, 10)}_${started.slice(11, 13)}${started.slice(14, 16)}.log`)
+    const lines = log.text.split('\n')
+    expect(lines.slice(0, 9)).toEqual([
+      `DiskSprawl demo: scan ${backups.id}`,
+      'Directory: Backups (id 3)',
+      'Folder: /data/backups',
+      `Started by: ${backups.trigger === 'scheduled' ? 'its schedule' : 'Scan now'}`,
+      'Engine: ncdu 2.9.1 (/usr/local/bin/ncdu)',
+      'Options: 1 thread, balanced pace, low priority, apparent size, one file system',
+      'Excluded: #snapshot, .snapshot, .zfs',
+      'Smallest folder stored: 1 MiB',
+      '',
+    ])
+    expect(lines[9]).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\+00:00 {2}Queued$/)
+    const errors = lines.filter(line => line.includes('  Error: '))
+    expect(errors).toHaveLength(backups.error_count)
+    expect(errors[0]).toMatch(/ {2}Error: \/data\/backups\/.+: read error$/)
+    expect(lines).toContain(`  Errors: ${backups.error_count} (listed above)`)
+    expect(lines.find(line => line.includes('  Completed in '))).toBeDefined()
+
+    // A queued scan has not started: no log until it does.
+    expect(demo.scan(demo.enqueue(2).scan_id).has_log).toBe(true)
+    const queued = demo.enqueue(4).scan_id
+    expect(demo.scan(queued).has_log).toBe(false)
+    expect(() => demo.scanLog(queued)).toThrow(expect.objectContaining({ code: 'scan_log_not_found', status: 404 }))
+    expect(() => demo.scanLog(999_999)).toThrow(expect.objectContaining({ code: 'scan_not_found', status: 404 }))
+
+    // Logs expire `scan_log_days` days after their scan ended.
+    const old = demo.scanList(3, null, 2000).filter(scan => Date.parse(scan.finished_at ?? '') < NOW - 2 * DAY)
+    expect(old.length).toBeGreaterThan(0)
+    expect(old.every(scan => scan.has_log === (Date.parse(scan.finished_at as string) >= NOW - 30 * DAY))).toBe(true)
+    demo.saveSettings({ ...demo.settings, scan_log_days: 1 })
+    expect(demo.scan(old[0].id).has_log).toBe(false)
+    expect(() => demo.saveSettings({ ...demo.settings, scan_log_days: 3651 })).toThrow(expect.objectContaining({ fields: { scan_log_days: 'invalid' } }))
+  })
+
+  test('names, time zones and endings', () => {
+    const { demo } = store()
+    const failed = demo.summary(4).last_attempt
+    if (!failed) throw new Error('no failed scan of Documents')
+    const { directory } = demo.get(4)
+    const nepal = scanLog({ scan: failed, directory: { ...directory, name: 'Docs: 2026/11 "final"' }, minMib: 1, stored: null, zone: 'Asia/Kathmandu' })
+    const started = new Date(Date.parse(failed.started_at as string) + (5 * 60 + 45) * 60_000).toISOString()
+    expect(nepal.name).toBe(`Docs_ 2026_11 _final__${started.slice(0, 10)}_${started.slice(11, 13)}${started.slice(14, 16)}.log`)
+    const lines = nepal.text.trimEnd().split('\n')
+    expect(lines.slice(-2)).toEqual([
+      expect.stringMatching(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\+05:45 {2}Failed after [\d hmin]+s: the folder does not exist \(it may not be mounted\)$/),
+      '  Reason: path_not_found',
+    ])
+    expect(folderName('..', 7)).toBe('directory-7')
+    expect(folderName(' .hidden. ', 7)).toBe('hidden')
+    const name = 'Fotos de niños_2026-11-15_1200.log'
+    expect(contentDisposition(name)).toBe(`attachment; filename="Fotos de ni_os_2026-11-15_1200.log"; filename*=UTF-8''Fotos%20de%20ni%C3%B1os_2026-11-15_1200.log`)
+    expect(attachmentName(contentDisposition(name))).toBe(name)
+    expect(attachmentName(contentDisposition('Media_2026-11-15_0300.log'))).toBe('Media_2026-11-15_0300.log')
   })
 })
 

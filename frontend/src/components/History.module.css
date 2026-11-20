@@ -159,6 +159,39 @@
   font-weight: 700;
 }
 
+/* The button that downloads a scan's log. */
+.logColumn {
+  width: 1%;
+  text-align: center;
+}
+
+.log {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  /* Within the cell's padding: rows with a log are as tall as the others. */
+  margin: -4px 0;
+  vertical-align: middle;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.log:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--primary-hover);
+}
+
+.log:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .warn {
   color: var(--warn);
 }
