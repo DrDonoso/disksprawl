@@ -16,7 +16,7 @@ const SCAN: ScanOut = {
   options: { engine: 'native', threads: 2, pace: 'balanced', low_priority: true, measure: 'apparent', one_filesystem: true, excludes: [] },
   queued_at: hoursAgo(3.1), started_at: hoursAgo(3.05), finished_at: hoursAgo(3), duration_seconds: 2520, total_bytes: 10,
   file_count: 1, dir_count: 0, error_count: 0, error_sample: [], message: null, capacity_total: null, capacity_used: null,
-  capacity_free: null, has_detail: true,
+  capacity_free: null, has_detail: true, has_log: true,
 }
 
 function summary(changes: Partial<DirectorySummaryOut>): DirectorySummaryOut {

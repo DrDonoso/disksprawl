@@ -109,6 +109,13 @@ class Scan(Base):
     # Whether the notifications of this scan's end were queued (none for scans still queued or
     # running). The scans of versions without notifications count as notified.
     notified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # The scan's log file, relative to DATA_DIR/logs (`Media/2026-11-20_0300.log`); null for scans
+    # that never started, those of earlier versions, and once the file expires (scan_logs.py).
+    log_file: Mapped[str | None] = mapped_column(String(300))
+
+    @property
+    def has_log(self) -> bool:
+        return self.log_file is not None
 
 
 class PathNode(Base):

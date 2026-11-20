@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { ToggleButton, ToggleButtonGroup } from 'react-aria-components'
-import { useCapacityHistory, useScans } from '../api/hooks'
+import { errorMessage } from '../api/client'
+import { useCapacityHistory, useDownloadLog, useScans } from '../api/hooks'
 import type { ScanOut, SettingsOut } from '../api/schema.gen'
 import { useI18n } from '../i18n'
 import { formatBytes, formatDateTime, formatDuration, formatPercent } from '../lib/format'
 import { failureReason } from '../lib/messages'
+import { Icon } from './Icon'
 import { LineChart, type Point } from './LineChart'
+import { Notice } from './ui'
 import styles from './History.module.css'
 
 const RANGES = [30, 90, 365] as const
@@ -25,7 +28,8 @@ function StatusCell({ scan }: { scan: ScanOut }) {
 
 /**
  * Size of the directory per scan, use of its volume, and the latest scans. A scan that keeps its
- * folders opens in the treemap from its point in the size chart or from its date.
+ * folders opens in the treemap from its point in the size chart or from its date; each scan that
+ * started downloads its log.
  */
 export function History({ directoryId, settings, shown, onOpen }: {
   directoryId: number
@@ -39,6 +43,7 @@ export function History({ directoryId, settings, shown, onOpen }: {
   const [days, setDays] = useState<Range>(90)
   const scans = useScans(directoryId, days)
   const capacity = useCapacityHistory(directoryId, days)
+  const downloadLog = useDownloadLog()
   const items = scans.data?.items ?? []
   const completed = items.filter(scan => scan.status === 'completed' && scan.finished_at && scan.total_bytes !== null)
   // Choosing the latest scan with folders goes back to the default view, which follows new scans.
@@ -96,6 +101,7 @@ export function History({ directoryId, settings, shown, onOpen }: {
               <th scope="col">{t('history.columns.engine')}</th>
               <th scope="col" className="number">{t('history.columns.duration')}</th>
               <th scope="col" className="number">{t('history.columns.size')}</th>
+              <th scope="col" className={styles.logColumn}>{t('history.columns.log')}</th>
             </tr></thead>
             <tbody>
               {recent.map(scan => {
@@ -112,11 +118,18 @@ export function History({ directoryId, settings, shown, onOpen }: {
                   <td>{t(`engines.${scan.engine}.name`)}</td>
                   <td className="number">{formatDuration(scan.duration_seconds)}</td>
                   <td className="number">{scan.total_bytes === null ? '—' : formatBytes(scan.total_bytes)}</td>
+                  <td className={styles.logColumn}>{scan.has_log && <button type="button" className={styles.log}
+                    title={t('history.log')} aria-label={t('history.logOf', { date })}
+                    disabled={downloadLog.isPending && downloadLog.variables === scan.id}
+                    onClick={() => downloadLog.mutate(scan.id)}>
+                    <Icon name="download" size={16} />
+                  </button>}</td>
                 </tr>
               })}
             </tbody>
           </table>
         </div>
+        {downloadLog.error && <Notice error>{errorMessage(downloadLog.error)}</Notice>}
       </div>}
     </div>
     {latest && settings && <p className="muted small">{t('history.help', { count: settings.keep_scans })}</p>}

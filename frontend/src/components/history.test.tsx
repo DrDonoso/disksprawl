@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { DemoStore } from '../demo/store'
@@ -20,6 +20,81 @@ const media = (search = '') => renderWithProviders(<DirectoryPage />, { route: `
 
 /** Text as the page shows it once whitespace is normalized (sizes have a non-breaking space). */
 const plain = (text: string) => text.replace(/\s+/g, ' ')
+
+/** The files the page downloads (jsdom saves nothing): their names and contents. */
+function downloads() {
+  const blobs = new Map<string, Blob>()
+  const files: { name: string; blob: Blob | undefined }[] = []
+  Object.assign(URL, {
+    createObjectURL: (blob: Blob) => {
+      const url = `blob:test/${blobs.size}`
+      blobs.set(url, blob)
+      return url
+    },
+    revokeObjectURL: () => {},
+  })
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    files.push({ name: this.download, blob: blobs.get(this.href) })
+  })
+  return files
+}
+
+describe('scan logs', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  test('each scan that started downloads its log from the latest scans; a queued one has none yet', async () => {
+    const user = userEvent.setup()
+    const files = downloads()
+    // Photos is scanning, so a scan of Media waits in the queue.
+    demo.enqueue(2)
+    demo.enqueue(1)
+    media()
+    const scans = await screen.findByRole('region', { name: 'Latest scans' })
+    expect(within(scans).getByRole('columnheader', { name: 'Log' })).toBeInTheDocument()
+    const [, queued, latest] = within(scans).getAllByRole('row')
+    expect(queued).toHaveTextContent('Queued')
+    expect(within(queued).queryByRole('button', { name: /^Download the log/ })).not.toBeInTheDocument()
+
+    const scan = demo.scanList(1, null, 10).find(item => item.status === 'completed')
+    if (!scan) throw new Error('no completed scan of Media')
+    const button = within(latest).getByRole('button', { name: `Download the log of the scan of ${formatDateTime(scan.finished_at)}` })
+    expect(button).toHaveAttribute('title', 'Download the log')
+    await user.click(button)
+    await waitFor(() => expect(files).toHaveLength(1))
+    const log = demo.scanLog(scan.id)
+    expect(files[0].name).toBe(log.name)
+    expect(files[0].name).toMatch(/^Media_\d{4}-\d\d-\d\d_\d{4}\.log$/)
+    expect(await files[0].blob?.text()).toBe(log.text)
+  })
+
+  test('a log that expired meanwhile says so, and its button goes', async () => {
+    const user = userEvent.setup()
+    const files = downloads()
+    media()
+    const scans = await screen.findByRole('region', { name: 'Latest scans' })
+    const buttons = await within(scans).findAllByRole('button', { name: /^Download the log of the scan of / })
+    const count = buttons.length
+    demo.settings.scan_log_days = 1
+    await user.click(buttons[count - 1])
+    expect(await screen.findByRole('alert')).toHaveTextContent('The log of this scan no longer exists: logs are deleted after the days set in Settings → General.')
+    await waitFor(() => expect(within(scans).getAllByRole('button', { name: /^Download the log of the scan of / }).length).toBeLessThan(count))
+    expect(files).toEqual([])
+  })
+
+  test('the errors of the last scan download with the rest of its log', async () => {
+    const user = userEvent.setup()
+    const files = downloads()
+    renderWithProviders(<DirectoryPage />, { route: '/directories/3', path: '/directories/:id' })
+    const last = demo.summary(3).last_scan
+    if (!last) throw new Error('no scan of Backups')
+    await user.click(await screen.findByText(/^Completed with \d+ errors?$/))
+    await user.click(screen.getByRole('button', { name: 'Download the log, with every error' }))
+    await waitFor(() => expect(files).toHaveLength(1))
+    expect(files[0].name).toMatch(/^Backups_\d{4}-\d\d-\d\d_\d{4}\.log$/)
+    const text = await files[0].blob?.text()
+    for (const error of last.error_sample) expect(text).toContain(`  Error: /data/backups/${error.path}: ${error.message}\n`)
+  })
+})
 
 describe('earlier scans in the treemap', () => {
   test('a date in the latest scans shows the folders of that scan, until going back to the latest one', async () => {

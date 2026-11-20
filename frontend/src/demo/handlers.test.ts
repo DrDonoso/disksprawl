@@ -5,7 +5,7 @@ import mswPackage from 'msw/package.json'
 import worker from '../../public/mockServiceWorker.js?raw'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { getResponse } from 'msw'
-import { UNAVAILABLE_IN_DEMO, UNHANDLED_PREFIX, handlers, unhandledHandler } from './handlers'
+import { UNAVAILABLE_IN_DEMO, UNHANDLED_PREFIX, handlers, resetDemo, unhandledHandler } from './handlers'
 
 const METHODS = ['get', 'put', 'post', 'delete', 'patch']
 
@@ -59,6 +59,18 @@ describe('the demo API', () => {
       expect(response?.status, operation).toBe(501)
       expect(await response?.json()).toEqual({ code: 'demo_unavailable' })
     }
+  })
+
+  test("a scan's log answers as a text attachment, like the backend", async () => {
+    const latest = resetDemo({ now: () => Date.now() }).summary(3).last_scan
+    const response = await getResponse(handlers, new Request(new URL(`/api/scans/${latest?.id}/log`, location.origin)))
+    expect(response?.status).toBe(200)
+    expect(response?.headers.get('Content-Type')).toBe('text/plain; charset=utf-8')
+    expect(response?.headers.get('Content-Disposition')).toMatch(/^attachment; filename="Backups_\d{4}-\d\d-\d\d_\d{4}\.log"$/)
+    expect(await response?.text()).toMatch(/^DiskSprawl demo: scan \d+\nDirectory: Backups \(id 3\)\n/)
+    const missing = await getResponse(handlers, new Request(new URL('/api/scans/999999/log', location.origin)))
+    expect(missing?.status).toBe(404)
+    expect(await missing?.json()).toEqual({ code: 'scan_not_found' })
   })
 
   test('the committed service worker matches the installed MSW (after upgrading msw, run `npx msw init public`)', () => {

@@ -106,17 +106,22 @@ def test_order_and_shared_volumes(client: TestClient, scan_root: Path) -> None:
 def test_settings(client: TestClient) -> None:
     current = client.get("/api/settings").json()
     assert current == {"capacity_interval_minutes": 15, "keep_scans": 30, "min_entry_mib": 1,
-                       "warn_percent": 80, "critical_percent": 90, "timezone": "Etc/UTC"}
-    changed = {**current, "keep_scans": 5, "capacity_interval_minutes": 60}
+                       "warn_percent": 80, "critical_percent": 90, "scan_log_days": 30,
+                       "timezone": "Etc/UTC"}
+    changed = {**current, "keep_scans": 5, "capacity_interval_minutes": 60, "scan_log_days": 3650}
     del changed["timezone"]
     assert client.put("/api/settings", json=changed, headers=WRITE).json()["keep_scans"] == 5
     assert client.get("/api/settings").json()["capacity_interval_minutes"] == 60
+    assert client.get("/api/settings").json()["scan_log_days"] == 3650
     wrong = {**changed, "warn_percent": 95, "critical_percent": 90}
     assert client.put("/api/settings", json=wrong, headers=WRITE).json()["code"] == (
         "thresholds_out_of_order"
     )
     assert client.put("/api/settings", json={**changed, "keep_scans": 0},
                       headers=WRITE).json()["fields"] == {"keep_scans": "invalid"}
+    for days in (0, 3651):
+        assert client.put("/api/settings", json={**changed, "scan_log_days": days},
+                          headers=WRITE).json()["fields"] == {"scan_log_days": "invalid"}
 
 
 def test_cron_preview(client: TestClient) -> None:

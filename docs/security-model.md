@@ -117,12 +117,16 @@ so trusting a network that untrusted clients can use would let them evade it. Se
   address at its push service and its keys, its language, the address DiskSprawl was opened at,
   its choices, and the notifications still to send to it. Files and directories are created
   readable by the container's user only.
+- **Scan logs**, also in the `data` volume (`logs/`), readable by the container's user only: one
+  text file per scan with the directory's name and folder, its options, its times, how it ended
+  and every path it could not read. Anyone who can sign in can download them. They are deleted
+  after the days set in **⚙ Settings → General** (30 by default).
 - **Not stored**: file contents, the names of files (except those that could not be read) and the
   password.
-- **Logs** identify directories and scans by number. Database errors never include the values of
-  their parameters, and unexpected errors log their type and stack trace but not their message.
-  When an engine fails, its last error lines are logged, and they may quote folder names. The
-  address of a device with notifications is never logged, only its push service.
+- **Logs** of the container identify directories and scans by number. Database errors never
+  include the values of their parameters, and unexpected errors log their type and stack trace but
+  not their message. When an engine fails, its last error lines are logged, and they may quote
+  folder names. The address of a device with notifications is never logged, only its push service.
 - **Outgoing connections**: none, except the notifications of the devices that turn them on. Each
   one is encrypted for its device, so only that device can read it (Web Push, RFC 8291), signed
   with a key derived from the session signing key (RFC 8292), and sent to the device's push service:
@@ -130,7 +134,8 @@ so trusting a network that untrusted clients can use would let them evade it. Se
   following a redirect. A notification carries the name of a directory, sizes, the time a scan took
   and the reason it failed, never a path or a file name. Without HTTPS, browsers offer no
   notifications, so nothing is ever sent.
-- Deleting a directory deletes its history; scans beyond the retention lose their folders.
+- Deleting a directory deletes its history and its scans' logs; scans beyond the retention lose
+  their folders.
 
 ## The public demo
 

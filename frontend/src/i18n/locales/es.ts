@@ -78,6 +78,7 @@ export const es: Messages<Dictionary> = {
     withErrors: { one: 'Completado con {count} error', other: 'Completado con {count} errores' },
     errorsHelp: 'Las carpetas o ficheros que no se pudieron leer no cuentan en los totales. Suele ser un problema de permisos: consulta la guía de despliegue.',
     moreErrors: { one: '…y {count} más.', other: '…y {count} más.' },
+    errorsLog: 'Descargar el log, con todos los errores',
     scanNow: 'Escanear ahora',
     queued: 'En cola',
     scanning: 'Escaneando…',
@@ -245,7 +246,9 @@ export const es: Messages<Dictionary> = {
       one: 'Elige un punto del gráfico de tamaño o una fecha para ver las carpetas de ese escaneo. Solo el último escaneo conserva sus carpetas; los anteriores, su tamaño.',
       other: 'Elige un punto del gráfico de tamaño o una fecha para ver las carpetas de ese escaneo. Los últimos {count} escaneos conservan sus carpetas; los anteriores, su tamaño.',
     },
-    columns: { date: 'Fecha', status: 'Resultado', trigger: 'Origen', engine: 'Motor', duration: 'Duración', size: 'Tamaño' },
+    columns: { date: 'Fecha', status: 'Resultado', trigger: 'Origen', engine: 'Motor', duration: 'Duración', size: 'Tamaño', log: 'Log' },
+    log: 'Descargar el log',
+    logOf: 'Descargar el log del escaneo del {date}',
     statuses: {
       queued: 'En cola',
       running: 'En marcha',
@@ -294,6 +297,10 @@ export const es: Messages<Dictionary> = {
       critical_percent: {
         label: 'Umbral crítico (%)',
         tip: 'A partir de este uso del volumen, su barra se pone en rojo.',
+      },
+      scan_log_days: {
+        label: 'Días que se guardan los logs',
+        tip: 'Cada escaneo escribe un fichero de log en el volumen de datos, con sus opciones, cómo terminó y todas las carpetas que no pudo leer: descárgalo desde los últimos escaneos. Los logs se borran estos días después de que termine su escaneo.',
       },
     },
     timezone: 'Zona horaria del servidor: {timezone} (la variable TZ).',
@@ -378,6 +385,7 @@ export const es: Messages<Dictionary> = {
       scan_not_found: 'Este escaneo no existe (o ya no existe).',
       scan_not_active: 'Este escaneo ya ha terminado.',
       scan_without_detail: 'Este escaneo ya no conserva sus carpetas.',
+      scan_log_not_found: 'El log de este escaneo ya no existe: los logs se borran pasados los días fijados en Ajustes → General.',
       no_scan_yet: 'Aún no hay ningún escaneo con carpetas.',
       no_previous_scan: 'No hay un escaneo anterior con el que comparar.',
       path_invalid: 'Escribe una ruta absoluta, por ejemplo /data/media.',

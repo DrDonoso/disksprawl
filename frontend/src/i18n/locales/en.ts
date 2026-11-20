@@ -76,6 +76,7 @@ export const en = {
     withErrors: { one: 'Completed with {count} error', other: 'Completed with {count} errors' },
     errorsHelp: 'Folders or files that could not be read are left out of the totals. Usually it is a permissions problem: see the deployment guide.',
     moreErrors: { one: '…and {count} more.', other: '…and {count} more.' },
+    errorsLog: 'Download the log, with every error',
     scanNow: 'Scan now',
     queued: 'Queued',
     scanning: 'Scanning…',
@@ -243,7 +244,9 @@ export const en = {
       one: 'Choose a point of the size chart or a date to see the folders of that scan. Only the latest scan keeps its folders; older ones keep their size.',
       other: 'Choose a point of the size chart or a date to see the folders of that scan. The latest {count} scans keep their folders; older ones keep their size.',
     },
-    columns: { date: 'Date', status: 'Result', trigger: 'Started by', engine: 'Engine', duration: 'Duration', size: 'Size' },
+    columns: { date: 'Date', status: 'Result', trigger: 'Started by', engine: 'Engine', duration: 'Duration', size: 'Size', log: 'Log' },
+    log: 'Download the log',
+    logOf: 'Download the log of the scan of {date}',
     statuses: {
       queued: 'Queued',
       running: 'Running',
@@ -292,6 +295,10 @@ export const en = {
       critical_percent: {
         label: 'Critical threshold (%)',
         tip: 'From this use of the volume on, its bar turns red.',
+      },
+      scan_log_days: {
+        label: 'Days scan logs are kept',
+        tip: 'Each scan writes a log file in the data volume, with its options, how it ended and every folder it could not read: download it from the latest scans. Logs are deleted this many days after their scan ends.',
       },
     },
     timezone: 'Server time zone: {timezone} (the TZ variable).',
@@ -376,6 +383,7 @@ export const en = {
       scan_not_found: 'This scan does not exist (any more).',
       scan_not_active: 'This scan has already finished.',
       scan_without_detail: 'This scan no longer keeps its folders.',
+      scan_log_not_found: 'The log of this scan no longer exists: logs are deleted after the days set in Settings → General.',
       no_scan_yet: 'No scan with folders yet.',
       no_previous_scan: 'There is no earlier scan to compare with.',
       path_invalid: 'Enter an absolute path, such as /data/media.',

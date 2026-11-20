@@ -141,6 +141,9 @@ class ScanOut(Contract):
     capacity_used: int | None
     capacity_free: int | None
     has_detail: bool
+    # Whether the scan's log file can be downloaded (GET /api/scans/{id}/log): every scan that
+    # started has one until it expires.
+    has_log: bool
 
 
 class ScanListOut(Contract):
@@ -273,6 +276,7 @@ class SettingsIn(Input):
     min_entry_mib: int = Field(ge=1, le=1024)
     warn_percent: int = Field(ge=1, le=99)
     critical_percent: int = Field(ge=2, le=100)
+    scan_log_days: int = Field(ge=1, le=3650)
 
 
 class SettingsOut(Contract):
@@ -281,6 +285,8 @@ class SettingsOut(Contract):
     min_entry_mib: int
     warn_percent: int
     critical_percent: int
+    # Days each scan's log file is kept after the scan ends.
+    scan_log_days: int
     # The server's time zone (TZ): schedules run on its clock.
     timezone: str
 

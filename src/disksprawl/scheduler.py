@@ -1,4 +1,5 @@
-"""Scheduled work with APScheduler: each directory's cron and the capacity measurements."""
+"""Scheduled work with APScheduler: each directory's cron, the capacity measurements and the expiry
+of scan logs."""
 
 import logging
 import threading
@@ -21,6 +22,9 @@ log = logging.getLogger(__name__)
 # A run missed while the app was down, or while it was busy, still starts within this window.
 GRACE = timedelta(hours=1)
 CAPACITY_JOB = "capacity"
+# Scan logs older than the `scan_log_days` setting are deleted at startup and then every hour.
+LOGS_JOB = "scan-logs"
+LOGS_INTERVAL_HOURS = 1
 # Capacity samples older than this are deleted (the history chart shows a year at most).
 CAPACITY_RETENTION = timedelta(days=400)
 # A scheduled scan that cannot be queued because the database is busy is tried again, this many
@@ -60,6 +64,13 @@ class Scheduler:
                 self.sync(directory)
             minutes = settings_store.load(db)["capacity_interval_minutes"]
         self.schedule_capacity(minutes, run_now=True)
+        self.scheduler.add_job(
+            self.sweep_logs,
+            IntervalTrigger(hours=LOGS_INTERVAL_HOURS, timezone=self.config.zone),
+            id=LOGS_JOB,
+            replace_existing=True,
+            next_run_time=utcnow(),
+        )
         self.catch_up()
 
     def shutdown(self) -> None:
@@ -151,6 +162,15 @@ class Scheduler:
                 )
                 if self._stopping.wait(ENQUEUE_RETRY_SECONDS):
                     return
+
+    def sweep_logs(self) -> None:
+        """Deletes the scan logs that expired. A failure is logged; the next hour tries again."""
+        try:
+            with self.sessions() as db:
+                days = settings_store.load(db)["scan_log_days"]
+            self.scanner.sweep_logs(days)
+        except Exception:
+            log.exception("Expired scan logs could not be deleted")
 
     def measure_directory(self, directory_id: int) -> None:
         with self.sessions() as db:

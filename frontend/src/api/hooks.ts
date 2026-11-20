@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, query } from './client'
+import { api, download, query } from './client'
 import type {
   AuthStatusOut, BrowseOut, CapacityHistoryOut, CronPreviewOut, DiffOut, DirectoryIn, DirectoryListOut,
   DirectorySummaryOut, EngineListOut, ProgressOut, ScanListOut, ScanOut, SettingsIn, SettingsOut, TreeOut,
@@ -106,6 +106,17 @@ export function useCancelScan() {
   return useMutation({
     mutationFn: (scan: { id: number; directory: number }) => api<ScanOut>(`/scans/${scan.id}/cancel`, 'POST'),
     onSuccess: (_, scan) => refresh(scan.directory),
+  })
+}
+
+/** Downloads a scan's log file; a log that expired meanwhile refreshes the scans on screen. */
+export function useDownloadLog() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (scan: number) => download(`/scans/${scan}/log`),
+    onError: async () => {
+      for (const key of ['scans', 'overview']) await client.invalidateQueries({ queryKey: [key] })
+    },
   })
 }
 

@@ -5,6 +5,7 @@
  */
 import { http, HttpResponse, type HttpHandler, type JsonBodyType, type PathParams } from 'msw'
 import type { DirectoryIn, SettingsIn, WhatsNewSeenIn } from '../api/schema.gen'
+import { contentDisposition } from './scanLog'
 import { DemoError, DemoStore } from './store'
 
 /** Logged for an /api request that no handler answers (the e2e tests watch for it). */
@@ -53,6 +54,8 @@ function route(resolve: Resolver, status = 200) {
         throw new DemoError('invalid_origin', 403)
       }
       const result = await resolve({ request, params, url })
+      // Answers that are not JSON (a scan's log) come ready.
+      if (result instanceof Response) return result
       if (status === 204) return new HttpResponse(null, { status })
       return HttpResponse.json(result as JsonBodyType, { status })
     } catch (error) {
@@ -148,6 +151,12 @@ export const handlers: HttpHandler[] = [
   http.get('/api/directories/:directoryId/capacity', route(({ params, url }) =>
     store.capacityHistory(id(params, 'directoryId'), queryInt(url, 'days', 1, 3660) ?? 30))),
   http.get('/api/scans/:scanId', route(({ params }) => store.scan(id(params, 'scanId')))),
+  http.get('/api/scans/:scanId/log', route(({ params }) => {
+    const log = store.scanLog(id(params, 'scanId'))
+    return new HttpResponse(log.text, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': contentDisposition(log.name) },
+    })
+  })),
   http.post('/api/scans/:scanId/cancel', route(({ params }) => store.cancel(id(params, 'scanId')))),
   http.get('/api/queue', route(() => ({ items: store.queue() }))),
   http.get('/api/settings', route(() => store.settingsOut())),

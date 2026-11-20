@@ -120,6 +120,11 @@ class Settings(BaseSettings):
         return self.data_dir / "disksprawl.db"
 
     @property
+    def logs_dir(self) -> Path:
+        """The scans' log files, one folder per directory name (scan_logs.py)."""
+        return self.data_dir / "logs"
+
+    @property
     def extra_hosts(self) -> tuple[str, ...]:
         hosts = []
         for raw in self.allowed_hosts.split(","):

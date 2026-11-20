@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# The database and the session key are readable by this user only.
+# The database, the scans' logs and the session key are readable by this user only.
 umask 077
 # One worker: the scan queue and the scheduler live in the application process. The database is
 # migrated at startup.

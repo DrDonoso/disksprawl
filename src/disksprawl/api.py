@@ -5,10 +5,11 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import cron, notifications, paths, queries, settings_store
+from . import cron, notifications, paths, queries, scan_logs, settings_store
 from .auth import COOKIE, Auth, client_address, get_auth, require_session
 from .config import Settings
 from .db import Directory, Scan, transaction, utcnow
@@ -343,6 +344,26 @@ def cancel_scan(scan_id: int, request: Request) -> ScanOut:
         return ScanOut.model_validate(scan)
 
 
+@router.get("/scans/{scan_id}/log", response_class=PlainTextResponse)
+def scan_log(scan_id: int, request: Request) -> PlainTextResponse:
+    # The scan's log file (scan_logs.py) as a download; a running scan's log, as far as it goes.
+    with request.app.state.sessions() as db:
+        scan = db.get(Scan, scan_id)
+        if scan is None:
+            raise AppError("scan_not_found", 404)
+        relative = scan.log_file
+    # Read whole, outside the database session: a log that grows meanwhile is sent as it was.
+    content = scanner(request).logs.read(relative) if relative else None
+    if relative is None or content is None:
+        raise AppError("scan_log_not_found", 404)
+    return PlainTextResponse(
+        content,
+        headers={
+            "Content-Disposition": scan_logs.content_disposition(scan_logs.download_name(relative))
+        },
+    )
+
+
 @router.get("/queue", response_model=QueueOut)
 def queue(request: Request, db: DB) -> QueueOut:
     return QueueOut(items=queries.active_progress(db, scanner(request)))
@@ -383,6 +404,8 @@ def put_settings(body: SettingsIn, request: Request) -> SettingsOut:
         # In batches, outside the settings' transaction: a large history takes a while to delete.
         for identifier in directory_ids:
             scanner(request).prune(identifier, values["keep_scans"])
+    if values["scan_log_days"] < before["scan_log_days"]:
+        scanner(request).sweep_logs(values["scan_log_days"])
     if values["capacity_interval_minutes"] != before["capacity_interval_minutes"]:
         scheduler(request).schedule_capacity(values["capacity_interval_minutes"])
     return settings_out(request, values)

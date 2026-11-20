@@ -248,6 +248,7 @@ export interface ScanOut {
   file_count: number | null
   finished_at: string | null
   has_detail: boolean
+  has_log: boolean
   id: number
   message: string | null
   options: ScanOptions
@@ -263,6 +264,7 @@ export interface SettingsIn {
   critical_percent: number
   keep_scans: number
   min_entry_mib: number
+  scan_log_days: number
   warn_percent: number
 }
 
@@ -271,6 +273,7 @@ export interface SettingsOut {
   critical_percent: number
   keep_scans: number
   min_entry_mib: number
+  scan_log_days: number
   timezone: string
   warn_percent: number
 }

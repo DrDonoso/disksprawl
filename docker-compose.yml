@@ -17,7 +17,7 @@ services:
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
       TRUSTED_PROXY_IPS: "${TRUSTED_PROXY_IPS:-127.0.0.1}"
     volumes:
-      # The database, the scan history and the session key.
+      # The database, the scan history, the scans' logs and the session key.
       - data:/app/data
       # The folders to analyze, read-only, below /data: one line per folder, then add each one in
       # Settings → Directories (as /data/storage here). The container runs as user 1000, which must

@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test as base, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 import { en } from '../src/i18n/locales/en'
 import { es } from '../src/i18n/locales/es'
 import type { Dictionary, Messages } from '../src/i18n/types'
@@ -130,19 +131,20 @@ test('"Scan now" shows the progress and then the new data', async ({ page }) => 
 test('the history opens an earlier scan in the treemap, from its date or from the size chart', async ({ page }) => {
   await enter(page, '/directories/1')
   const scans = page.getByRole('region', { name: en.history.recent })
+  const dates = scans.getByRole('button', { name: new RegExp(`\\(${en.history.openHint}\\)$`) })
   const earlier = page.getByRole('status').filter({ hasText: en.treemap.pastScan.split('{')[0].trim() })
   const scan = page.getByRole('combobox', { name: new RegExp(`^${en.treemap.scan}\\b`) })
-  await expect(scans.getByRole('button').first()).toBeVisible()
+  await expect(dates.first()).toBeVisible()
   await expect(earlier).toHaveCount(0)
 
   // The scan before the latest one, from its date: the page goes up to its treemap.
-  await scans.getByRole('button').nth(1).click()
+  await dates.nth(1).click()
   await expect(earlier).toBeVisible()
   await expect(page).toHaveURL(/[?&]scan=\d+/)
   await expect(page.getByRole('heading', { name: en.treemap.title })).toBeInViewport()
   await expect(scan).not.toHaveValue('')
   await expect(page.getByRole('group', { name: 'Treemap of Media' }).getByRole('button').first()).toBeVisible()
-  await expect(scans.getByRole('button').nth(1)).toHaveAttribute('aria-current', 'true')
+  await expect(dates.nth(1)).toHaveAttribute('aria-current', 'true')
   await expectAccessible(page)
   // Its changes are those since the scan before it.
   await page.getByRole('radio', { name: en.treemap.changes }).click()
@@ -166,6 +168,26 @@ test('the history opens an earlier scan in the treemap, from its date or from th
   await expect(earlier).toBeVisible()
   await expect(page).toHaveURL(/[?&]scan=\d+/)
   await expect(page.getByRole('heading', { name: en.treemap.title })).toBeInViewport()
+})
+
+test('each scan downloads its log, from the latest scans and from the errors of the last one', async ({ page }) => {
+  await enter(page, '/directories/3')
+  const scans = page.getByRole('region', { name: en.history.recent })
+  await expect(scans.getByRole('columnheader', { name: en.history.columns.log })).toBeVisible()
+  let saving = page.waitForEvent('download')
+  await scans.getByRole('button', { name: new RegExp(`^${en.history.logOf.split('{')[0]}`) }).first().click()
+  let file = await saving
+  expect(file.suggestedFilename()).toMatch(/^Backups_\d{4}-\d\d-\d\d_\d{4}\.log$/)
+  const text = await readFile(await file.path(), 'utf8')
+  expect(text).toMatch(/^DiskSprawl demo: scan \d+\nDirectory: Backups \(id 3\)\nFolder: \/data\/backups\n/)
+  expect(text).toMatch(/\n\S+ \S+ {2}Completed in .+\n {2}Size: /)
+  await expectAccessible(page)
+
+  await page.getByText(/^Completed with \d+ errors?$/).click()
+  saving = page.waitForEvent('download')
+  await page.getByRole('button', { name: en.directory.errorsLog }).click()
+  file = await saving
+  expect(await readFile(await file.path(), 'utf8')).toContain('  Error: /data/backups/server/databases/postgres-data: read error\n')
 })
 
 test('a directory can be added, edited and deleted', async ({ page }) => {

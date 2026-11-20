@@ -1,7 +1,8 @@
 """Pieces every scan engine shares: the job, exclusions, the folder tree, errors and progress.
 
 A scan runs in a worker subprocess (`python -m disksprawl.engines JOB.json`). It writes progress as
-JSON lines on stdout, the folders of the scan to the job's result file, and a final `done` line.
+JSON lines on stdout, with each path it cannot read, the folders of the scan to the job's result
+file, and a final `done` line.
 """
 
 import json
@@ -21,7 +22,11 @@ MEASURES = ("apparent", "disk")
 # Share of the time a paced scan rests: balanced rests a quarter of the time, gentle half.
 PAUSE_SHARE = {"max": 0.0, "balanced": 0.25, "gentle": 0.5}
 MAX_ERROR_SAMPLES = 20
+# Errors a scan reports one by one for its log; it counts every one.
+MAX_REPORTED_ERRORS = 100_000
 PROGRESS_INTERVAL = 0.5
+# Every message of the worker goes to stdout whole, whichever thread sends it.
+_EMIT_LOCK = threading.Lock()
 
 
 @dataclass
@@ -121,20 +126,24 @@ class Excluder:
 
 
 class ErrorLog:
-    """Counts the errors of a scan (permission denied, vanished files…) and keeps a sample."""
+    """Counts the errors of a scan (permission denied, vanished files…), keeps a sample, and
+    reports each one to `report` as it happens (for the scan's log), the first
+    MAX_REPORTED_ERRORS of them."""
 
-    def __init__(self) -> None:
+    def __init__(self, report: Callable[[str, str], None] | None = None) -> None:
         self.count = 0
         self.sample: list[dict[str, str]] = []
+        self.report = report
         self._lock = threading.Lock()
 
     def add(self, path: str, message: str) -> None:
+        path, message = display_name(path), display_name(message[:300])
         with self._lock:
             self.count += 1
             if len(self.sample) < MAX_ERROR_SAMPLES:
-                self.sample.append(
-                    {"path": display_name(path), "message": display_name(message[:300])}
-                )
+                self.sample.append({"path": path, "message": message})
+            if self.report is not None and self.count <= MAX_REPORTED_ERRORS:
+                self.report(path, message)
 
 
 def os_error_message(error: OSError) -> str:
@@ -283,7 +292,6 @@ class Progress:
         self.current: str | None = None
         self.phase = "scanning"
         self._stop = threading.Event()
-        self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
 
     def snapshot(self) -> dict[str, Any]:
@@ -301,7 +309,7 @@ class Progress:
     def emit(self, message: dict[str, Any]) -> None:
         # ASCII JSON of clean text: whatever the names or the locale, every line reaches the server.
         line = json.dumps(clean(message), ensure_ascii=True)
-        with self._lock:
+        with _EMIT_LOCK:
             self.out.write(line + "\n")
             self.out.flush()
 

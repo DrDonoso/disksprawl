@@ -14,6 +14,7 @@ the web interface.
 - [Host names and reverse proxies](#host-names-and-reverse-proxies)
 - [Folders to analyze](#folders-to-analyze)
 - [Settings in the interface](#settings-in-the-interface)
+- [Scan logs](#scan-logs)
 - [Notifications](#notifications)
 - [Language and theme](#language-and-theme)
 - [Set by the image](#set-by-the-image)
@@ -155,9 +156,70 @@ checks the expression as you type and shows its next three runs.
 | Smallest folder stored | 1 MiB | 1–1024 | Smaller folders count in the totals and appear as "loose files and small folders". |
 | Warning threshold | 80 % | 1–99 | From this use on, a volume's bar turns amber. |
 | Critical threshold | 90 % | 2–100 | From this use on, it turns red. Must be above the warning threshold. |
+| Days scan logs are kept | 30 | 1–3650 | Each scan's [log file](#scan-logs) is deleted this many days after the scan ends. |
 
 **⚙ Settings → Notifications** turns on the notifications of the browser or phone it is opened on,
 and chooses which ones it gets: see below.
+
+## Scan logs
+
+Each scan that starts writes a text file in the `data` volume, named after its directory and the
+moment it started in the server's time zone (`TZ`):
+
+```text
+/app/data/logs/<directory name>/<YYYY-MM-DD_HHMM>.log
+```
+
+For example `logs/Media/2026-11-20_0300.log`. A second scan that starts within the same minute
+gets `_2`, `_3`… Characters that do not belong in a file name (`/ \ : * ? " < > |` and control
+characters) become `_`, and leading or trailing dots and spaces go. Renaming a directory leaves its
+earlier logs where they are, and they still download from its history; two directories with the
+same name share a folder, and each log says which one it belongs to. A scan cancelled while it
+waited in the queue never started, so it has no log.
+
+A log starts with the directory, its folder, what started the scan (its schedule or **Scan now**),
+the engine with its version, and the options. Then come the events, each with its time in the
+server's time zone: queued, started, every folder or file the scan could not read, and the end:
+
+```text
+DiskSprawl 20261120: scan 123
+Directory: Media (id 3)
+Folder: /data/media
+Started by: its schedule
+Engine: ncdu 2.9.1 (/usr/local/bin/ncdu)
+Options: 4 threads, balanced pace, low priority, apparent size, one file system
+Excluded: #snapshot, .snapshot, .zfs
+Smallest folder stored: 1 MiB
+
+2026-11-20 03:00:00+01:00  Queued
+2026-11-20 03:00:01+01:00  Started
+2026-11-20 03:07:42+01:00  Error: /data/media/photos/private: read error
+2026-11-20 03:24:13+01:00  Completed in 24 min 12 s
+  Size: 1.23 TiB (1,352,454,123,456 bytes)
+  Files: 123,456
+  Folders: 7,890
+  Folders stored: 2,345
+  Errors: 1 (listed above)
+  Volume: 80.3 % used (3.21 TiB used, 805 GiB free, 4.00 TiB in total)
+```
+
+A scan that fails ends with why (`Failed after 1 s: the folder does not exist (it may not be
+mounted)`, followed by the error code and the last lines of the engine when it crashed); one that
+is cancelled, or interrupted by a restart of DiskSprawl, says so. The interface keeps a sample of
+20 errors per scan; the log lists every one, up to 100,000.
+
+**Downloading**: the **Log** column of the latest scans, in each directory's history, downloads the
+log of each scan that started, even while it runs; so does the button below the errors of the
+last scan. **From the host**, the logs are files of the volume:
+
+```bash
+docker compose exec app ls -R /app/data/logs
+docker compose cp app:/app/data/logs ./disksprawl-logs
+```
+
+**Expiry**: a log is deleted **Days scan logs are kept** days (**⚙ Settings → General**, 30 by
+default) after its last line, normally the end of its scan. DiskSprawl checks when it starts and
+then every hour, and at once when the setting goes down. Deleting a directory deletes its logs.
 
 ## Notifications
 
@@ -214,9 +276,9 @@ and the charts follow it.
 
 ## Set by the image
 
-The image sets the working folder to `/app`, so the database and the generated session key live
-in `/app/data` (the `data` volume), the analyzed folders in `/data`, and the built web interface in
-`/app/frontend/dist`. `IMAGE_TAG` and `BUILD_DATE` are set at build time and reported by
+The image sets the working folder to `/app`, so the database, the scans' logs and the generated
+session key live in `/app/data` (the `data` volume), the analyzed folders in `/data`, and the built
+web interface in `/app/frontend/dist`. `IMAGE_TAG` and `BUILD_DATE` are set at build time and reported by
 `/api/version`. The container listens on port 7780 with one worker, because the scan queue and the
 scheduler live in the application process.
 
@@ -232,7 +294,7 @@ When running from the source code, three more variables replace the image's layo
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATA_DIR` | `data` | Folder of the database and the session key. |
+| `DATA_DIR` | `data` | Folder of the database, the scans' logs and the session key. |
 | `SCAN_ROOT` | `/data` | The folder every directory must be inside. |
 | `FRONTEND_DIR` | `frontend/dist` | The built web interface served at `/`; absent when Vite serves it. |
 

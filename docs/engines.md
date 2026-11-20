@@ -246,6 +246,9 @@ The last **30** completed scans of each directory keep their folders (also adjus
 treemap, where any of them opens from the history, and the comparisons; older scans keep only
 their totals, for the history. Deleting a directory deletes its history, never your files.
 
+Each scan that starts also writes a [log file](configuration.md#scan-logs) with every path the
+engine could not read, as it reports them: kept 30 days by default.
+
 ## Engine versions
 
 The image contains GNU du from Debian and the official static builds of ncdu 2.9.1 and gdu
