@@ -246,8 +246,10 @@ The last **30** completed scans of each directory keep their folders (also adjus
 treemap, where any of them opens from the history, and the comparisons; older scans keep only
 their totals, for the history. Deleting a directory deletes its history, never your files.
 
-Each scan that starts also writes a [log file](configuration.md#scan-logs) with every path the
-engine could not read, as it reports them: kept 30 days by default.
+Each scan that starts also writes a [log file](configuration.md#scan-logs) with its progress every
+10 seconds, every path the engine could not read, as it reports them, and where its time went: kept
+30 days by default. The Native engine also times every folder it reads, so its log lists the slow
+ones as they happen and, at the end, the slowest folders and the reading time by folder.
 
 ## Engine versions
 

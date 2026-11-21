@@ -249,10 +249,11 @@ class Scanner:
     def live(self) -> Live | None:
         return self._live
 
-    def prune(self, directory_id: int, keep: int) -> None:
-        """Keeps the folders of the latest `keep` completed scans of a directory (in batches)."""
+    def prune(self, directory_id: int, keep: int) -> int:
+        """Keeps the folders of the latest `keep` completed scans of a directory (in batches);
+        returns how many scans lost theirs."""
         with self._storage_lock:
-            retention.prune(self.sessions, directory_id, keep)
+            return retention.prune(self.sessions, directory_id, keep)
 
     def sweep_logs(self, days: int) -> int:
         """Deletes the logs of the scans that ended more than `days` days ago; how many. Each
@@ -349,8 +350,9 @@ class Scanner:
             self._fail(scan_id, "internal_error")
         finally:
             live = self._live
-            if live is not None and live.log is not None and live.log.open:
+            if live is not None and live.log is not None:
                 self._end_log(scan_id, live.log)
+                live.log.close()
             with self._lock:
                 self._live = None
                 self._current = None
@@ -449,8 +451,11 @@ class Scanner:
         return scan_log
 
     def _end_log(self, scan_id: int, scan_log: ScanLog) -> None:
-        """Writes how the scan ended, and closes its log. A scan still marked running (the app is
+        """Writes how the scan ended, once; the log stays open for what follows (the pruning of
+        older scans) until the worker thread closes it. A scan still marked running (the app is
         stopping and could not record its end) gets its end when the app starts again."""
+        if scan_log.ended or not scan_log.open:
+            return
         try:
             with self.sessions() as db:
                 scan = db.get(Scan, scan_id)
@@ -458,8 +463,6 @@ class Scanner:
                 scan_log.end(scan)
         except Exception:
             log.exception("The log of scan %s could not be ended", scan_id)
-        finally:
-            scan_log.close()
 
     def _run(self, scan_id: int) -> None:
         with self.sessions() as db:
@@ -540,15 +543,23 @@ class Scanner:
                 self._fail(scan_id, detail or "scan_failed")
             else:
                 live.phase = "saving"
-                keep = self._store_patiently(scan_id, directory_id, path, result_path, outcome)
                 if live.log is not None:
                     entries = outcome.get("entries")
                     live.log.stored = entries if isinstance(entries, int) else None
+                    live.log.timing = outcome.get("timing")
+                    live.log.saving()
+                saving = time.monotonic()
+                keep = self._store_patiently(scan_id, directory_id, path, result_path, outcome)
+                if live.log is not None:
+                    live.log.save_seconds = time.monotonic() - saving
                     # Its end now: pruning a large history can take minutes.
                     self._end_log(scan_id, live.log)
                 if keep is not None:
                     try:
-                        self.prune(directory_id, keep)
+                        pruning = time.monotonic()
+                        pruned = self.prune(directory_id, keep)
+                        if pruned and live.log is not None:
+                            live.log.pruned(pruned, keep, time.monotonic() - pruning)
                     except Exception:
                         # The scan is stored; the next one prunes again.
                         log.exception("Old scans of directory %s could not be pruned", directory_id)
@@ -582,6 +593,8 @@ class Scanner:
         reader.start()
         done: dict[str, Any] | None = None
         failure = ""
+        # A message the log cannot take is left out, and reported once: the log never stops a scan.
+        unlogged = False
         assert process.stdout is not None
         for raw in process.stdout:
             try:
@@ -603,14 +616,20 @@ class Scanner:
                 live.current = message.get("current")
             elif kind == "done":
                 done = message
-            elif kind == "scan_error":
-                if live.log is not None:
-                    live.log.error(str(message.get("path", "")), str(message.get("message", "")))
             elif kind == "error":
                 failure = str(message.get("code", "scan_failed"))
                 detail = message.get("detail")
                 if detail:
                     failure += f": {detail}"
+            if live.log is not None:
+                try:
+                    self._log_message(live, live.log, kind, message)
+                except Exception:
+                    if not unlogged:
+                        log.exception(
+                            "The log of scan %s left out a message of its worker", live.scan_id
+                        )
+                    unlogged = True
         deadline = time.monotonic() + STOP_GRACE
         while process.poll() is None and time.monotonic() < deadline:
             time.sleep(0.05)
@@ -633,6 +652,28 @@ class Scanner:
             if tail:
                 log.warning("Scan worker %s failed:\n%s", live.scan_id, "\n".join(tail))
         return None, failure
+
+    @staticmethod
+    def _log_message(live: Live, scan_log: ScanLog, kind: Any, message: dict[str, Any]) -> None:
+        """Writes what a message of the worker tells to the scan's log: its progress, a path it
+        could not read, a folder that was slow to read."""
+        if kind == "progress":
+            share, _ = live.estimate(time.monotonic() - live.started)
+            scan_log.progress(
+                live.phase,
+                live.counters,
+                live.dirs,
+                live.files,
+                live.done_bytes,
+                live.current,
+                share,
+            )
+        elif kind == "scan_error":
+            scan_log.error(str(message.get("path", "")), str(message.get("message", "")))
+        elif kind == "slow_folder":
+            scan_log.slow_folder(
+                str(message.get("path", "")), message.get("seconds"), message.get("entries")
+            )
 
     def _store_patiently(
         self, scan_id: int, directory_id: int, path: str, result_path: Path, done: dict[str, Any]

@@ -298,7 +298,7 @@ export const en = {
       },
       scan_log_days: {
         label: 'Days scan logs are kept',
-        tip: 'Each scan writes a log file in the data volume, with its options, how it ended and every folder it could not read: download it from the latest scans. Logs are deleted this many days after their scan ends.',
+        tip: 'Each scan writes a log file in the data volume, with its options, its progress every 10 seconds, every folder it could not read, how it ended and where its time went: download it from the latest scans. Logs are deleted this many days after their scan ends.',
       },
     },
     timezone: 'Server time zone: {timezone} (the TZ variable).',

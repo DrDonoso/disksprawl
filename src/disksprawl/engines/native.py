@@ -2,7 +2,8 @@
 
 Every entry is counted with `lstat` semantics, like GNU du: symbolic links are never followed, hard
 links count once, folders count their own blocks on disk but nothing in apparent size, and with
-`one_filesystem` folders on another device are skipped (`du -x`).
+`one_filesystem` folders on another device are skipped (`du -x`). Every folder is timed, and every
+rest, for the scan's log (timing.py).
 """
 
 import os
@@ -26,6 +27,7 @@ from .common import (
     monotonic,
     os_error_message,
 )
+from .timing import Timing
 
 
 def rest_ratio(pace: str) -> float:
@@ -43,6 +45,7 @@ def scan_native(
     sleep: Sleep | None = None,
     clock: Clock = monotonic,
     scandir: Callable[[str], Any] = os.scandir,
+    timing: Timing | None = None,
 ) -> None:
     root = job.root
     excluded = Excluder(job.excludes)
@@ -50,6 +53,8 @@ def scan_native(
     ratio = rest_ratio(job.pace)
     stop = threading.Event()
     rest = sleep or (lambda seconds: stop.wait(seconds) and None)
+    if timing is not None:
+        timing.threads = max(1, job.threads)
     root_stat = os.lstat(root)
     root_device = root_stat.st_dev
     # Each hard-linked file counts once, in the first of its folders by path, whatever order the
@@ -62,13 +67,15 @@ def scan_native(
     work.put((root_index, root, ""))
     failures: list[BaseException] = []
 
-    def visit(folder: int, path: str, relative_path: str) -> None:
+    def visit(folder: int, path: str, relative_path: str) -> int:
+        """Reads a folder; returns its entries, the excluded ones left out."""
         progress.current = relative_path
+        listed = 0
         try:
             entries = scandir(path)
         except OSError as error:
             errors.add(relative_path, os_error_message(error))
-            return
+            return listed
         with entries:
             while True:
                 try:
@@ -81,6 +88,7 @@ def scan_native(
                 name = entry.name
                 if excluded(name):
                     continue
+                listed += 1
                 # entry.path keeps the real name for the file system; the tree, the errors and the
                 # progress get it as valid text (bytes that are not UTF-8 escaped).
                 label = display_name(name)
@@ -118,6 +126,7 @@ def scan_native(
                 if progress.files is not None:
                     progress.files += 1
         progress.dirs += 1
+        return listed
 
     def worker() -> None:
         while not stop.is_set():
@@ -127,9 +136,15 @@ def scan_native(
                 continue
             try:
                 started = clock()
-                visit(folder, path, relative_path)
+                listed = visit(folder, path, relative_path)
+                seconds = clock() - started
+                if timing is not None:
+                    timing.folder(folder, relative_path, seconds, listed)
                 if ratio:
-                    rest((clock() - started) * ratio)
+                    pause = seconds * ratio
+                    rest(pause)
+                    if timing is not None:
+                        timing.rested(pause)
             except BaseException as error:  # noqa: BLE001 - reported by the main thread
                 failures.append(error)
                 stop.set()

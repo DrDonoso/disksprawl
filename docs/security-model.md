@@ -118,9 +118,10 @@ so trusting a network that untrusted clients can use would let them evade it. Se
   its choices, and the notifications still to send to it. Files and directories are created
   readable by the container's user only.
 - **Scan logs**, also in the `data` volume (`logs/`), readable by the container's user only: one
-  text file per scan with the directory's name and folder, its options, its times, how it ended
-  and every path it could not read. Anyone who can sign in can download them. They are deleted
-  after the days set in **⚙ Settings → General** (30 by default).
+  text file per scan with the directory's name and folder, its options, its times, its progress
+  with the folder it was reading every 10 seconds, the folders that were slow to read (of any
+  size), how it ended and every path it could not read. Anyone who can sign in can download them.
+  They are deleted after the days set in **⚙ Settings → General** (30 by default).
 - **Not stored**: file contents, the names of files (except those that could not be read) and the
   password.
 - **Logs** of the container identify directories and scans by number. Database errors never

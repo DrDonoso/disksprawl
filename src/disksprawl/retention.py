@@ -57,8 +57,9 @@ def delete_orphan_paths(
 
 def prune(
     sessions: sessionmaker[Session], directory_id: int, keep: int, batch: int | None = None
-) -> None:
-    """Keeps the folders of the latest `keep` completed scans; older scans keep their summary."""
+) -> int:
+    """Keeps the folders of the latest `keep` completed scans; older scans keep their summary.
+    Returns how many scans lost their folders."""
     with sessions() as db:
         detailed = db.scalars(
             select(Scan.id)
@@ -67,13 +68,14 @@ def prune(
         ).all()
     expired = list(detailed[keep:])
     if not expired:
-        return
+        return 0
     # The scans lose their detail before their rows go, so nothing reads a half-deleted scan.
     with transaction(sessions) as db:
         db.execute(update(Scan).where(Scan.id.in_(expired)).values(has_detail=False))
     for scan_id in expired:
         delete_entries(sessions, scan_id, batch)
     delete_orphan_paths(sessions, directory_id, batch)
+    return len(expired)
 
 
 def delete_directory(

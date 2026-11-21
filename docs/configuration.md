@@ -179,34 +179,77 @@ waited in the queue never started, so it has no log.
 
 A log starts with the directory, its folder, what started the scan (its schedule or **Scan now**),
 the engine with its version, and the options. Then come the events, each with its time in the
-server's time zone: queued, started, every folder or file the scan could not read, and the end:
+server's time zone: queued, started, and while it reads the folders:
+
+- **Every 10 seconds**, what it has read so far, its share done (estimated from the previous scan,
+  when there is one), what it read in those 10 seconds and the folder it is reading. Lines where
+  the counters barely move while the folder stays the same show where the scan lost its time. du
+  counts no files and tells no folder; ncdu with several threads counts the files and folders
+  together; gdu tells nothing until it ends.
+- **Every folder or file it could not read**, up to 100,000. The interface keeps a sample of 20.
+- **Slow folders** (Native engine): each folder that takes 5 seconds or more to read, without its
+  subfolders (listing it and reading the details of its entries), up to 1,000.
+
+After the reading come the phases (adding up the results, saving them) and the end. A completed
+scan then tells where its time went: reading the folders, with the time it rested at its pace,
+adding up the results and saving them. With the Native engine it also lists the 20 folders that
+took longest to read, without their subfolders, and the reading time of the 15 first-level folders
+that took longest, each with its subfolders, and below each one up to 5 of its own subfolders, those
+that took at least 1 % of the reading. With several threads these times are added up over the
+threads, so they can add up to more than the scan took. When older scans lose their folders (beyond
+**Detailed scans kept per directory**), a last line says how long removing them took. A shortened
+example:
 
 ```text
-DiskSprawl 20261120: scan 123
+DiskSprawl 20261121: scan 123
 Directory: Media (id 3)
 Folder: /data/media
 Started by: its schedule
-Engine: ncdu 2.9.1 (/usr/local/bin/ncdu)
-Options: 4 threads, balanced pace, low priority, apparent size, one file system
+Engine: native (Python 3.14)
+Options: 1 thread, gentle pace, low priority, apparent size, one file system
 Excluded: #snapshot, .snapshot, .zfs
 Smallest folder stored: 1 MiB
 
-2026-11-20 03:00:00+01:00  Queued
-2026-11-20 03:00:01+01:00  Started
-2026-11-20 03:07:42+01:00  Error: /data/media/photos/private: read error
-2026-11-20 03:24:13+01:00  Completed in 24 min 12 s
-  Size: 1.23 TiB (1,352,454,123,456 bytes)
-  Files: 123,456
-  Folders: 7,890
-  Folders stored: 2,345
+2026-11-21 06:00:00+01:00  Queued
+2026-11-21 06:00:00+01:00  Started
+2026-11-21 06:00:10+01:00  Progress: 1,318 folders, 20,447 files, 38.9 GiB read, about 2 % done; in the last 10 s: +1,318 folders, +20,447 files, +38.9 GiB; reading /data/media/Photos/2014/2014-03
+[…]
+2026-11-21 06:41:20+01:00  Progress: 30,102 folders, 498,775 files, 1.62 TiB read, about 44 % done; in the last 10 s: +0 folders, +3,118 files, +412 MiB; reading /data/media/Backups/old-laptop/AppData/Local/Cache
+2026-11-21 06:42:31+01:00  Slow folder: /data/media/Backups/old-laptop/AppData/Local/Cache took 1 min 52 s for 48,113 entries
+[…]
+2026-11-21 07:13:05+01:00  Error: /data/media/Photos/private: Permission denied
+[…]
+2026-11-21 07:48:04+01:00  Adding up the results
+2026-11-21 07:48:07+01:00  Saving the results: 24,503 folders
+2026-11-21 07:48:31+01:00  Completed in 1 h 48 min 31 s
+  Size: 3.87 TiB (4,255,103,217,664 bytes)
+  Files: 1,204,377
+  Folders: 68,411
+  Folders stored: 24,503
   Errors: 1 (listed above)
-  Volume: 80.3 % used (3.21 TiB used, 805 GiB free, 4.00 TiB in total)
+  Volume: 78.3 % used (4.12 TiB used, 1.14 TiB free, 5.26 TiB in total)
+  Time:
+    Reading the folders: 1 h 48 min 04 s
+      Resting (gentle pace): 54 min 01 s, 50 % of it
+    Adding up the results: 3.1 s
+    Saving the results: 24.4 s
+  Slowest folders to read, without their subfolders:
+    1 min 52 s  48,113 entries  /data/media/Backups/old-laptop/AppData/Local/Cache
+    41.0 s      12,077 entries  /data/media/Photos/2019/Imports
+    18.2 s       9,880 entries  /data/media/Backups/old-laptop/Mail
+  Reading time by folder, with its subfolders:
+    29 min 08 s    53.9 %   8,120 folders  /data/media/Backups
+      22 min 29 s  41.6 %   1,032 folders  /data/media/Backups/old-laptop
+    17 min 17 s    32.0 %  38,977 folders  /data/media/Photos
+      9 min 01 s   16.7 %   4,410 folders  /data/media/Photos/2019
+    6 min 11 s     11.4 %  21,314 folders  /data/media/Music
+    1 min 26 s      2.7 %                  /data/media, without its subfolders
+2026-11-21 07:48:34+01:00  Removed the folders of 1 older scan in 2.8 s, keeping those of the latest 30 scans
 ```
 
 A scan that fails ends with why (`Failed after 1 s: the folder does not exist (it may not be
 mounted)`, followed by the error code and the last lines of the engine when it crashed); one that
-is cancelled, or interrupted by a restart of DiskSprawl, says so. The interface keeps a sample of
-20 errors per scan; the log lists every one, up to 100,000.
+is cancelled, or interrupted by a restart of DiskSprawl, says so.
 
 **Downloading**: the **Log** column of the latest scans, in each directory's history, downloads the
 log of each scan that started, even while it runs; so does the button below the errors of the

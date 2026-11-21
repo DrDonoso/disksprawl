@@ -1,9 +1,10 @@
 """Scan worker: `python -m disksprawl.engines JOB.json`.
 
 Runs one scan with the job's engine, prints JSON lines on stdout (`progress` every half second, a
-`scan_error` for each path it cannot read, then `done` or `error`) and writes the folders of the
-scan to the job's result file. The server starts it at low priority when the directory asks for it
-(nice, ionice) and stops it with SIGTERM.
+`scan_error` for each path it cannot read and, with the Native engine, a `slow_folder` for each
+folder that takes long to read, then `done` with the times of the scan, or `error`) and writes the
+folders of the scan to the job's result file. The server starts it at low priority when the
+directory asks for it (nice, ionice) and stops it with SIGTERM.
 """
 
 import fcntl
@@ -15,6 +16,7 @@ import subprocess
 import sys
 import termios
 import threading
+import time
 from collections.abc import Callable
 from typing import IO, NoReturn
 
@@ -24,6 +26,7 @@ from .gdu import GduReader, gdu_command, gdu_errors, ignore_patterns, parse_gdu
 from .native import scan_native
 from .ncdu import TerminalProgress, ncdu_command, parse_ncdu
 from .pacing import Pacer
+from .timing import Timing
 
 TAIL_LINES = 40
 child: subprocess.Popen[bytes] | None = None
@@ -55,9 +58,11 @@ def run_external(
     on_stderr: Callable[[str], None],
     *,
     terminal: bool = False,
+    timing: Timing | None = None,
 ) -> None:
     """Runs an engine binary, paced, reading its stdout with `read_stdout` and each line of its
-    stderr with `on_stderr` (or the text of a pseudo-terminal, with `terminal`)."""
+    stderr with `on_stderr` (or the text of a pseudo-terminal, with `terminal`). The time it was
+    frozen at the pace goes to `timing`."""
     global child
     env = {**os.environ, "LC_ALL": "C", "LANG": "C"}
     if terminal:
@@ -105,6 +110,8 @@ def run_external(
         finished = read_stdout(child.stdout)
     finally:
         pacer.stop()
+        if timing is not None:
+            timing.rested(pacer.rested)
         if not finished:
             stop_child()
         child.wait()
@@ -114,14 +121,16 @@ def run_external(
         raise EngineFailed(f"exit status {child.returncode}" + (f": {detail}" if detail else ""))
 
 
-def run(job: Job, errors: ErrorLog | None = None) -> tuple[Tree, ErrorLog, Progress]:
+def run(
+    job: Job, errors: ErrorLog | None = None, timing: Timing | None = None
+) -> tuple[Tree, ErrorLog, Progress]:
     if errors is None:
         errors = ErrorLog()
     if job.engine == "native":
         progress = Progress()
         tree = Tree()
         progress.start()
-        scan_native(job, tree, errors, progress)
+        scan_native(job, tree, errors, progress, timing=timing)
         return tree, errors, progress
     binary = job.binary
     if not binary:
@@ -136,6 +145,7 @@ def run(job: Job, errors: ErrorLog | None = None) -> tuple[Tree, ErrorLog, Progr
             du_command(job, binary),
             lambda stream: parse_du(stream, job.root, tree, progress),
             lambda line: du_error(line, job.root, errors),
+            timing=timing,
         )
         return tree, errors, progress
     if job.engine == "ncdu":
@@ -154,6 +164,7 @@ def run(job: Job, errors: ErrorLog | None = None) -> tuple[Tree, ErrorLog, Progr
             lambda stream: parse_ncdu(stream, job, tree, errors, export_progress),
             terminal.feed if threaded else (lambda line: None),
             terminal=threaded,
+            timing=timing,
         )
         if threaded:
             progress.phase = "finishing"
@@ -181,7 +192,11 @@ def run(job: Job, errors: ErrorLog | None = None) -> tuple[Tree, ErrorLog, Progr
 
         try:
             run_external(
-                job, gdu_command(job, binary, ignore_file, log_file), read, lambda line: None
+                job,
+                gdu_command(job, binary, ignore_file, log_file),
+                read,
+                lambda line: None,
+                timing=timing,
             )
             with open(log_file, encoding="utf-8", errors="replace") as handle:
                 gdu_errors(readers[-1], [line for line in handle if "level=" in line], errors)
@@ -204,11 +219,23 @@ def main(argv: list[str]) -> int:
     reported = ErrorLog(
         lambda path, message: out.emit({"type": "scan_error", "path": path, "message": message})
     )
+    # So is each folder that takes long to read (Native), and at the end where the time went.
+    timing = Timing(
+        lambda path, seconds, entries: out.emit({
+            "type": "slow_folder",
+            "path": path,
+            "seconds": round(seconds, 3),
+            "entries": entries,
+        })
+    )
     try:
-        tree, errors, progress = run(job, reported)
+        started = time.monotonic()
+        tree, errors, progress = run(job, reported, timing)
+        walked = time.monotonic()
         progress.phase = "finishing"
         result = tree.finalize(job.min_entry_bytes)
         result.write(job.result_path)
+        times = timing.summary(tree, walked - started, time.monotonic() - walked)
         progress.stop()
     except EngineFailed as error:
         out.emit({"type": "error", "code": "engine_failed", "detail": str(error)[:500]})
@@ -230,6 +257,7 @@ def main(argv: list[str]) -> int:
         "entries": len(result.entries),
         "error_count": errors.count,
         "error_sample": errors.sample,
+        "timing": times,
     })
     return 0
 

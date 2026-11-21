@@ -1,0 +1,11 @@
+{
+  "kind": "improved",
+  "en": {
+    "title": "Scan logs tell where the time went",
+    "body": "Every 10 seconds the log of a scan writes what it has read and the folder it is reading, then the time each phase took. With the Native engine it also lists the folders that were slow to read, and the reading time of each folder."
+  },
+  "es": {
+    "title": "Los logs de escaneo dicen en qué se fue el tiempo",
+    "body": "Cada 10 segundos el log de un escaneo apunta lo que lleva leído y la carpeta que está leyendo, y al final cuánto duró cada fase. Con el motor Native lista además las carpetas que tardaron en leerse y el tiempo de lectura de cada carpeta."
+  }
+}

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import running_as_root, write_tree
 
+from disksprawl.engines import timing as timing_module
 from disksprawl.engines.common import (
     ErrorLog,
     Excluder,
@@ -19,6 +20,7 @@ from disksprawl.engines.common import (
     read_result,
 )
 from disksprawl.engines.native import rest_ratio, scan_native
+from disksprawl.engines.timing import Timing
 
 
 def run(root: Path, **options: object) -> tuple[dict[str, tuple[int, int | None, int]], ErrorLog]:
@@ -176,6 +178,59 @@ def test_pace_rests_its_share_of_the_time(tmp_path: Path) -> None:
         scan_native(job, Tree(), ErrorLog(), Progress(io.StringIO()),
                     sleep=rests.append, clock=lambda ticks=ticks: float(next(ticks)))
         assert rests == ([pytest.approx(2 * ratio)] * 6 if ratio else [])
+
+
+def test_every_folder_is_timed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """For the scan's log: how long each folder took to read without its subfolders, the slow
+    ones as they happen, the rest at the pace, and each first-level folder with its subfolders."""
+    monkeypatch.setattr(timing_module, "SLOW_FOLDER_SECONDS", 3.0)
+    root = str(tmp_path)
+    device = os.lstat(root).st_dev
+    listings = {
+        root: [
+            FakeEntry("Media", f"{root}/Media", True, device),
+            FakeEntry("Photos", f"{root}/Photos", True, device),
+            FakeEntry("file", f"{root}/file", False, device),
+        ],
+        f"{root}/Media": [
+            FakeEntry("Movies", f"{root}/Media/Movies", True, device),
+            FakeEntry("a", f"{root}/Media/a", False, device),
+        ],
+        f"{root}/Photos": [FakeEntry("b", f"{root}/Photos/b", False, device)],
+        f"{root}/Media/Movies": [
+            FakeEntry("c", f"{root}/Media/Movies/c", False, device),
+            FakeEntry("d", f"{root}/Media/Movies/d", False, device),
+        ],
+    }
+    # One thread reads the folder, Media, Photos and Movies in 1, 2, 4 and 8 seconds.
+    ticks = iter([0.0, 1.0, 10.0, 12.0, 20.0, 24.0, 30.0, 38.0])
+    reported: list[tuple[str, float, int]] = []
+    timing = Timing(lambda *folder: reported.append(folder))
+    tree = Tree()
+    job = Job(engine="native", root=root, result_path="unused", pace="gentle")
+    scan_native(job, tree, ErrorLog(), Progress(io.StringIO()), sleep=lambda seconds: None,
+                clock=lambda: next(ticks), scandir=lambda path: FakeListing(listings[path]),
+                timing=timing)
+    assert reported == [("Photos", 4.0, 1), ("Media/Movies", 8.0, 2)]
+    assert timing.summary(tree, 30.0, 1.5) == {
+        "scan_seconds": 30.0,
+        "rest_seconds": 15.0,
+        "finish_seconds": 1.5,
+        "threads": 1,
+        "reading_seconds": 15.0,
+        "own_seconds": 1.0,
+        "slowest": [
+            {"path": "Media/Movies", "seconds": 8.0, "entries": 2},
+            {"path": "Photos", "seconds": 4.0, "entries": 1},
+            {"path": "Media", "seconds": 2.0, "entries": 2},
+            {"path": "", "seconds": 1.0, "entries": 3},
+        ],
+        "folders": [
+            {"path": "Media", "seconds": 10.0, "folders": 2,
+             "subfolders": [{"path": "Media/Movies", "seconds": 8.0, "folders": 1}]},
+            {"path": "Photos", "seconds": 4.0, "folders": 1, "subfolders": []},
+        ],
+    }
 
 
 def test_finalize_keeps_large_folders_with_their_parents() -> None:

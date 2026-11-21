@@ -193,6 +193,75 @@ describe('scan logs', () => {
     expect(() => demo.saveSettings({ ...demo.settings, scan_log_days: 3651 })).toThrow(expect.objectContaining({ fields: { scan_log_days: 'invalid' } }))
   })
 
+  test('they follow the walk and tell where its time went', () => {
+    const { demo } = store()
+    const read = (id: number) => {
+      const lines = demo.scanLog(id).text.trimEnd().split('\n')
+      const events = lines.flatMap(line => /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\+00:00 {2}(.+)$/.exec(line)?.slice(1) ?? [])
+      return { lines, events, progress: events.filter(event => event.startsWith('Progress: ')) }
+    }
+    const size = String.raw`[\d.]+ (B|[KMGTPE]iB)`
+
+    // Native: every ten seconds what it read, its share done and the folder it reads; the slow
+    // folders; the phases; the time of each phase, the slowest folders and the time by folder.
+    const photos = demo.summary(2).last_scan
+    if (!photos) throw new Error('no scan of Photos')
+    const native = read(photos.id)
+    expect(native.progress.length).toBeGreaterThan((photos.duration_seconds as number) / 10 - 3)
+    const line = new RegExp(String.raw`^Progress: [\d,]+ folders?, [\d,]+ files?, ${size} read, about \d+ % done; in the last 10 s: \+[\d,]+ folders?, \+[\d,]+ files?, \+${size}; reading /data/photos(/.+)?$`)
+    expect(native.progress.filter(event => !line.test(event))).toEqual([])
+    expect(native.events.some(event => /^Slow folder: \/data\/photos\/.+ took .+ for [\d,]+ entr(y|ies)$/.test(event))).toBe(true)
+    expect(native.events.slice(-4)).toEqual([
+      'Adding up the results',
+      expect.stringMatching(/^Saving the results: [\d,]+ folders$/),
+      expect.stringMatching(/^Completed in /),
+      expect.stringMatching(/^Removed the folders of 1 older scan in \d+\.\d s, keeping those of the latest 30 scans$/),
+    ])
+    const time = native.lines.indexOf('  Time:')
+    expect(native.lines.slice(time, time + 7)).toEqual([
+      '  Time:',
+      expect.stringMatching(/^ {4}Reading the folders: [\d hmin]+ s$/),
+      expect.stringMatching(/^ {6}Resting \(gentle pace\): [\d hmin]+ s, 50 % of it$/),
+      expect.stringMatching(/^ {4}Adding up the results: \d+\.\d s$/),
+      expect.stringMatching(/^ {4}Saving the results: \d+\.\d s$/),
+      '  Slowest folders to read, without their subfolders:',
+      expect.stringMatching(/^ {4}\S.* {2}[\d,]+ entr(y|ies) {2}\/data\/photos\/.+$/),
+    ])
+    const byFolder = native.lines.indexOf('  Reading time by folder, with its subfolders, added up over the 2 threads:')
+    expect(byFolder - time - 6).toBe(20)
+    // Its first-level folders, the slowest first, add up to the reading of every folder.
+    const shares = native.lines.slice(byFolder + 1, -1).filter(row => /^ {4}\S/.test(row)).map(row => Number(/ ([\d.]+) % /.exec(row)?.[1]))
+    expect(shares).toEqual([...shares].sort((a, b) => b - a))
+    expect(shares.reduce((sum, share) => sum + share, 0)).toBeGreaterThan(98)
+    expect(shares.reduce((sum, share) => sum + share, 0)).toBeLessThan(100.5)
+
+    // gdu tells nothing until it ends; the rest at its pace, and no folder times.
+    const media = demo.summary(1).last_scan
+    if (!media) throw new Error('no scan of Media')
+    const gdu = read(media.id)
+    expect(gdu.events.slice(0, 3)).toEqual(['Queued', 'Started', 'The engine reports no progress until it ends'])
+    expect(gdu.progress).toEqual([])
+    expect(gdu.lines).toContainEqual(expect.stringMatching(/^ {6}Resting \(balanced pace\): [\d hmin]+ s, 25 % of it$/))
+    expect(gdu.lines.some(row => row.startsWith('  Slowest folders'))).toBe(false)
+
+    // du counts no files and tells no folder; at the maximum pace it never rests.
+    const documents = demo.scanList(4, null, 10).find(scan => scan.status === 'completed')
+    if (!documents) throw new Error('no completed scan of Documents')
+    const du = read(documents.id)
+    expect(du.progress.length).toBeGreaterThan(0)
+    const duLine = new RegExp(String.raw`^Progress: [\d,]+ folders?, ${size} read, about \d+ % done; in the last 10 s: \+[\d,]+ folders?, \+${size}$`)
+    expect(du.progress.filter(event => !duLine.test(event))).toEqual([])
+    expect(du.lines.some(row => row.includes('Resting'))).toBe(false)
+
+    // A scan cut short has its progress, and no times.
+    const cancelled = demo.scanList(2, 30, 100).find(scan => scan.status === 'cancelled')
+    if (!cancelled) throw new Error('no cancelled scan of Photos')
+    const cut = read(cancelled.id)
+    expect(cut.progress.length).toBeGreaterThan(0)
+    expect(cut.events[cut.events.length - 1]).toMatch(/^Cancelled after /)
+    expect(cut.lines).not.toContain('  Time:')
+  })
+
   test('names, time zones and endings', () => {
     const { demo } = store()
     const failed = demo.summary(4).last_attempt
