@@ -92,8 +92,9 @@ and exactly which folders grew or shrank between two scans. It only ever reads y
 - **History** charts of each directory's size and of its volume's use over 30, 90 or 365 days,
   and the latest scans with their engine, duration and errors. A point of the size chart or the
   date of a scan opens that scan in the treemap.
-- **A log file of every scan**: its options, when it was queued, started and ended, how it ended
-  and every folder it could not read, downloaded from the latest scans and kept 30 days (or as
+- **A log file of every scan**: its options, its progress every 10 seconds with the folder it was
+  reading, every folder it could not read, how it ended and where its time went (with the Native
+  engine, the folders that took longest), downloaded from the latest scans and kept 30 days (or as
   many as you choose) in the data volume.
 - **Notifications** on your phone or computer, even with DiskSprawl closed: when a scan finishes
   (with its size and how much it changed) or fails, and when a volume reaches the warning or the
@@ -152,7 +153,8 @@ flowchart LR
   from slowing down the interface, whatever the engine.
 - The engine's output is reduced to the folders worth keeping (1 MiB or more by default) and
   stored in SQLite with the totals, so the treemap, the changes and the history are queries, not
-  new scans. Each scan also writes a log file, with every folder it could not read.
+  new scans. Each scan also writes a log file, with its progress, every folder it could not read
+  and where its time went.
 - Notifications use Web Push: each one is encrypted for the device that asked for it and sent
   through its browser's push service (Apple, Google, Mozilla or Microsoft), the only connections
   DiskSprawl makes.

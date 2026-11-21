@@ -403,11 +403,21 @@ export class DemoStore {
     const scan = this.scans.find(item => item.id === id)
     if (!scan) throw new DemoError('scan_not_found', 404)
     if (!this.hasLog(scan)) throw new DemoError('scan_log_not_found', 404)
-    const { directory } = this.get(scan.directory_id)
+    const { directory, model } = this.get(scan.directory_id)
+    const started = Date.parse(scan.started_at as string)
+    const finished = scan.finished_at === null ? null : Date.parse(scan.finished_at)
+    const completed = this.completed(scan.directory_id)
+    const ended = (item: DemoScan) => Date.parse(item.finished_at as string)
+    // Once a scan completes, the oldest scan beyond the latest `keep_scans` loses its folders.
+    const older = finished === null ? 0 : completed.filter(item => item.id !== scan.id && ended(item) < finished).length
+    const keep = this.settings.keep_scans
     return scanLog({
       scan: this.out(scan), directory, engine: ENGINES.find(engine => engine.id === scan.engine),
       minMib: this.settings.min_entry_mib, zone: this.timezone,
       stored: scan.status === 'completed' ? this.folders(scan.directory_id, scan).size : null,
+      folders: finished === null ? undefined : snapshot(model, finished),
+      previous: completed.find(item => ended(item) <= started) ?? null,
+      pruned: scan.status === 'completed' && older >= keep ? { scans: 1, keep } : undefined,
     })
   }
 

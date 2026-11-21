@@ -1,5 +1,5 @@
-"""The log file of each scan: what was scanned and how, how it ended, and every path it could not
-read.
+"""The log file of each scan: what was scanned and how, how it went, where its time went, how it
+ended, and every path it could not read.
 
 Each scan that starts gets a text file in DATA_DIR/logs/<directory name>/<YYYY-MM-DD_HHMM>.log,
 named after the moment it started in the server's time zone (TZ), with `_2`, `_3`… when that name
@@ -8,7 +8,9 @@ leaves its earlier logs where they are. A scan cancelled while it was queued nev
 no log.
 
 A log is written while its scan runs: a header with the directory and the options, then one line
-per event with its time (queued, started, each path that could not be read, the end). Writing is
+per event with its time: queued, started, its progress every PROGRESS_SECONDS with the folder being
+read, each path that could not be read, each folder that took long to read (Native), the phases
+that follow the reading, and the end, with where the time went (engines/timing.py). Writing is
 best effort: when it fails (a full disk), the app's log says so once and the scan carries on.
 
 Logs expire `scan_log_days` days (⚙ Settings → General) after their last line, usually the end of
@@ -21,15 +23,17 @@ but in its own folder below DATA_DIR/logs.
 """
 
 import logging
+import math
 import os
 import posixpath
 import re
 import threading
+import time
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, TypeGuard
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -37,11 +41,14 @@ from .capacity import percent
 from .db import Scan, utcnow
 from .engines import EngineInfo
 from .engines.common import MAX_REPORTED_ERRORS, display_name
+from .engines.timing import MAX_REPORTED_SLOW_FOLDERS, MIN_SHARE
 
 log = logging.getLogger(__name__)
 
 SUFFIX = ".log"
 DAY_SECONDS = 86_400
+# Seconds between two progress lines while a scan reads the folders.
+PROGRESS_SECONDS = 10.0
 # Characters a folder name never keeps: path separators, those Windows does not allow in file names
 # (the logs may be copied there) and control characters.
 UNSAFE = re.compile(r'[\x00-\x1f\x7f/\\:*?"<>|]')
@@ -123,6 +130,149 @@ def plural(count: int, one: str, other: str) -> str:
     return f"{count:,} {one if count == 1 else other}"
 
 
+def increase(count: int, one: str, other: str) -> str:
+    """`+1 folder`, `+2,001 files`."""
+    return f"{count:+,} {one if count == 1 else other}"
+
+
+def seconds_text(seconds: float) -> str:
+    """`0.4 s`, `12.3 s`, then as duration_text: `4 min 05 s`."""
+    return f"{seconds:.1f} s" if seconds < 60 else duration_text(seconds)
+
+
+def amount(value: Any) -> float | None:
+    """A number of seconds from the worker, or None when it is not one (an integer too large for a
+    float among them)."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
+def is_count(value: Any) -> TypeGuard[int]:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def where(root: str, path: str) -> str:
+    """A path the worker reports, relative to the scanned folder, below the folder as configured."""
+    return one_line(posixpath.join(root, path) if path else root)
+
+
+def table(rows: list[list[str]]) -> list[str]:
+    """Aligned, indented rows: the first cell to the left, the middle ones to the right, the last
+    one (a path) as it is."""
+    if not rows:
+        return []
+    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]) - 1)]
+    lines = []
+    for row in rows:
+        cells = [row[0].ljust(widths[0])]
+        cells += [cell.rjust(width) for cell, width in zip(row[1:-1], widths[1:], strict=True)]
+        lines.append("    " + "  ".join([*cells, row[-1]]))
+    return lines
+
+
+def timing_lines(timing: Any, save_seconds: float | None, root: str, pace: str | None) -> list[str]:
+    """Where the time of a completed scan went, from the worker's summary (engines/timing.py) and
+    the saving: the phases, then with the Native engine the slowest folders and the reading time by
+    folder. Whatever the summary lacks is left out."""
+    summary: dict[str, Any] = timing if isinstance(timing, dict) else {}
+    phases = []
+    scan = amount(summary.get("scan_seconds"))
+    if scan is not None:
+        phases.append(f"Reading the folders: {seconds_text(scan)}")
+        rest = amount(summary.get("rest_seconds"))
+        if rest and scan:
+            phases.append(
+                f"  Resting ({PACES.get(pace or '', 'pace')}): {seconds_text(rest)},"
+                f" {round(100 * min(rest / scan, 1))} % of it"
+            )
+    finish = amount(summary.get("finish_seconds"))
+    if finish is not None:
+        phases.append(f"Adding up the results: {seconds_text(finish)}")
+    if save_seconds is not None:
+        phases.append(f"Saving the results: {seconds_text(save_seconds)}")
+    lines = ["  Time:", *(f"    {line}" for line in phases)] if phases else []
+    return lines + slowest_lines(summary.get("slowest"), root) + folder_lines(summary, root)
+
+
+def slowest_lines(items: Any, root: str) -> list[str]:
+    rows = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            continue
+        seconds = amount(item.get("seconds"))
+        if seconds is None:
+            continue
+        entries = item.get("entries")
+        count = plural(entries, "entry", "entries") if is_count(entries) else ""
+        rows.append([seconds_text(seconds), count, where(root, item["path"])])
+    if not rows:
+        return []
+    return ["  Slowest folders to read, without their subfolders:", *table(rows)]
+
+
+def folder_lines(summary: dict[str, Any], root: str) -> list[str]:
+    reading = amount(summary.get("reading_seconds"))
+    items = summary.get("folders")
+    if not reading or not isinstance(items, list):
+        return []
+
+    def row(item: Any, indent: str) -> list[str] | None:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            return None
+        seconds = amount(item.get("seconds"))
+        if seconds is None:
+            return None
+        folders = item.get("folders")
+        return [
+            indent + seconds_text(seconds),
+            f"{100 * seconds / reading:.1f} %",
+            plural(folders, "folder", "folders") if is_count(folders) else "",
+            where(root, item["path"]),
+        ]
+
+    rows = []
+    for item in items:
+        line = row(item, "")
+        if line is None:
+            continue
+        rows.append(line)
+        subfolders = item.get("subfolders")
+        for subfolder in subfolders if isinstance(subfolders, list) else []:
+            nested = row(subfolder, "  ")
+            if nested is not None:
+                rows.append(nested)
+    own = amount(summary.get("own_seconds"))
+    if rows and own and own >= MIN_SHARE * reading:
+        rows.append([
+            seconds_text(own),
+            f"{100 * own / reading:.1f} %",
+            "",
+            f"{where(root, '')}, without its subfolders",
+        ])
+    if not rows:
+        return []
+    title = "  Reading time by folder, with its subfolders"
+    threads = summary.get("threads")
+    if is_count(threads) and threads > 1:
+        title += f", added up over the {threads} threads"
+    return [f"{title}:", *table(rows)]
+
+
+@dataclass(frozen=True)
+class Sample:
+    """The counters of the last progress line, and when it was written."""
+
+    time: float
+    dirs: int | None
+    files: int | None
+    bytes: int
+
+
 @dataclass(frozen=True)
 class About:
     """What a log is about: its scan and the directory, as they were when the scan started."""
@@ -182,16 +332,28 @@ class ScanLog:
         handle: IO[str] | None = None,
         relative: str | None = None,
         root: str = "",
+        pace: str | None = None,
     ):
         self.scan_id = scan_id
         self.zone = zone
         self.relative = relative
         # The scanned folder as configured: errors are reported relative to it.
         self.root = root
+        self.pace = pace
         # Read errors listed so far, folders stored, and the last lines of a failed worker.
         self.listed = 0
         self.stored: int | None = None
         self.tail: list[str] = []
+        # The phase of the scan, the last progress line (the start, at first), whether the engine
+        # reports no progress, and the slow folders listed so far.
+        self.phase = "scanning"
+        self.sample = Sample(time.monotonic(), 0, 0, 0)
+        self.silent = False
+        self.slow = 0
+        # Where the time went: the worker's summary, and the seconds saving took.
+        self.timing: Any = None
+        self.save_seconds: float | None = None
+        self.ended = False
         self._handle = handle
 
     @property
@@ -221,11 +383,89 @@ class ScanLog:
         if self.listed >= MAX_REPORTED_ERRORS:
             return
         self.listed += 1
-        where = posixpath.join(self.root, path) if path else self.root
-        self.event(f"Error: {one_line(where)}: {one_line(message)}")
+        self.event(f"Error: {where(self.root, path)}: {one_line(message)}")
+
+    def progress(
+        self,
+        phase: str,
+        counters: bool,
+        dirs: int | None,
+        files: int | None,
+        done_bytes: int,
+        current: str | None,
+        share: float | None = None,
+    ) -> None:
+        """The progress the worker sends every half second: a line every PROGRESS_SECONDS while it
+        reads the folders, and one when it starts adding up the results. `dirs` is None when the
+        folders are counted with the files, `files` when they are not counted; `share` is the
+        estimated share done."""
+        if phase != self.phase:
+            self.phase = phase
+            if phase == "finishing":
+                self.event("Adding up the results")
+            return
+        if phase != "scanning":
+            return
+        if not counters:
+            if not self.silent:
+                self.silent = True
+                self.event("The engine reports no progress until it ends")
+            return
+        now = time.monotonic()
+        last = self.sample
+        if now - last.time < PROGRESS_SECONDS:
+            return
+        totals = []
+        changes = []
+        if dirs is None:
+            items = files or 0
+            totals.append(plural(items, "file or folder", "files and folders"))
+            changes.append(increase(items - (last.files or 0), "file or folder", "files and folders"))
+        else:
+            totals.append(plural(dirs, "folder", "folders"))
+            changes.append(increase(dirs - (last.dirs or 0), "folder", "folders"))
+            if files is not None:
+                totals.append(plural(files, "file", "files"))
+                changes.append(increase(files - (last.files or 0), "file", "files"))
+        totals.append(f"{size_text(done_bytes)} read")
+        grown = done_bytes - last.bytes
+        changes.append(("+" if grown >= 0 else "-") + size_text(abs(grown)))
+        text = f"Progress: {', '.join(totals)}"
+        if share is not None:
+            text += f", about {round(100 * share)} % done"
+        text += f"; in the last {round(now - last.time)} s: {', '.join(changes)}"
+        if current is not None:
+            text += f"; reading {where(self.root, current)}"
+        self.event(text)
+        self.sample = Sample(now, dirs, files, done_bytes)
+
+    def slow_folder(self, path: str, seconds: Any, entries: Any) -> None:
+        """A folder that took long to read, without its subfolders (Native)."""
+        took = amount(seconds)
+        if took is None or self.slow >= MAX_REPORTED_SLOW_FOLDERS:
+            return
+        self.slow += 1
+        text = f"Slow folder: {where(self.root, path)} took {seconds_text(took)}"
+        if is_count(entries):
+            text += f" for {plural(entries, 'entry', 'entries')}"
+        self.event(text)
+
+    def saving(self) -> None:
+        self.event(
+            "Saving the results"
+            + (f": {plural(self.stored, 'folder', 'folders')}" if self.stored is not None else "")
+        )
+
+    def pruned(self, scans: int, keep: int, seconds: float) -> None:
+        """Older scans of the directory lost their folders after this one completed."""
+        self.event(
+            f"Removed the folders of {plural(scans, 'older scan', 'older scans')} in"
+            f" {seconds_text(seconds)}, keeping those of the latest {plural(keep, 'scan', 'scans')}"
+        )
 
     def end(self, scan: Scan) -> None:
-        """How the scan ended, from its record."""
+        """How the scan ended, from its record, and where its time went."""
+        self.ended = True
         moment = scan.finished_at or utcnow()
         took = duration_text(scan.duration_seconds)
         if scan.status == "completed":
@@ -244,7 +484,10 @@ class ScanLog:
                     f" ({size_text(scan.capacity_used)} used, {size_text(scan.capacity_free)}"
                     f" free, {size_text(scan.capacity_total or 0)} in total)"
                 )
-            self.write(*(f"  {line}" for line in details))
+            self.write(
+                *(f"  {line}" for line in details),
+                *timing_lines(self.timing, self.save_seconds, self.root, self.pace),
+            )
         elif scan.status == "failed":
             reason = REASONS.get((scan.message or "").split(":", 1)[0])
             self.event(f"Failed after {took}" + (f": {reason}" if reason else ""), moment)
@@ -320,6 +563,7 @@ class ScanLogs:
                         self._text(descriptor),
                         f"{folder_text}/{name}",
                         about.path,
+                        str(about.options.get("pace", "")),
                     )
         except OSError as error:
             log.warning(

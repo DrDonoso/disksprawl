@@ -300,7 +300,7 @@ export const es: Messages<Dictionary> = {
       },
       scan_log_days: {
         label: 'Días que se guardan los logs',
-        tip: 'Cada escaneo escribe un fichero de log en el volumen de datos, con sus opciones, cómo terminó y todas las carpetas que no pudo leer: descárgalo desde los últimos escaneos. Los logs se borran estos días después de que termine su escaneo.',
+        tip: 'Cada escaneo escribe un fichero de log en el volumen de datos, con sus opciones, su progreso cada 10 segundos, todas las carpetas que no pudo leer, cómo terminó y en qué se le fue el tiempo: descárgalo desde los últimos escaneos. Los logs se borran estos días después de que termine su escaneo.',
       },
     },
     timezone: 'Zona horaria del servidor: {timezone} (la variable TZ).',

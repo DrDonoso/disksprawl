@@ -4,6 +4,7 @@ cycles, so it rests the pace's share of the time without knowing about it."""
 import os
 import signal
 import threading
+import time
 from collections.abc import Callable
 
 from .common import PAUSE_SHARE
@@ -33,6 +34,9 @@ class Pacer:
         self.kill = kill
         self.stopped = threading.Event()
         self.paused = False
+        # Seconds the process has been frozen so far (for the scan's log).
+        self.rested = 0.0
+        self._paused_at = 0.0
         self.lock = threading.Lock()
         self.thread: threading.Thread | None = None
 
@@ -57,11 +61,18 @@ class Pacer:
                 if self.stopped.is_set() or not self._signal(signal.SIGSTOP):
                     return
                 self.paused = True
+                self._paused_at = time.monotonic()
             self.stopped.wait(resting)
             with self.lock:
-                self.paused = False
+                self._resumed()
                 if not self._signal(signal.SIGCONT):
                     return
+
+    def _resumed(self) -> None:
+        """Records the end of a rest (call with the lock held)."""
+        if self.paused:
+            self.paused = False
+            self.rested += time.monotonic() - self._paused_at
 
     def stop(self) -> None:
         """Ends pacing and makes sure the process is running."""
@@ -69,6 +80,6 @@ class Pacer:
         with self.lock:
             if self.paused:
                 self._signal(signal.SIGCONT)
-                self.paused = False
+                self._resumed()
         if self.thread:
             self.thread.join()
